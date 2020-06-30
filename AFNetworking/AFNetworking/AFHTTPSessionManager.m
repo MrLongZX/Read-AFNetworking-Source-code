@@ -63,45 +63,57 @@
     return [self initWithBaseURL:nil sessionConfiguration:configuration];
 }
 
+// 根据 url、configuration 参数 初始化对象
 - (instancetype)initWithBaseURL:(NSURL *)url
            sessionConfiguration:(NSURLSessionConfiguration *)configuration
 {
+    // 调用父类 AFURLSessionManager 初始化方法
     self = [super initWithSessionConfiguration:configuration];
     if (!self) {
         return nil;
     }
 
     // Ensure terminal slash for baseURL path, so that NSURL +URLWithString:relativeToURL: works as expected
+    // 处理 url，确保 baseURL 路径的斜杠，以便 NSURL +URLWithString:relativeToURL: 正常工作
     if ([[url path] length] > 0 && ![[url absoluteString] hasSuffix:@"/"]) {
         url = [url URLByAppendingPathComponent:@""];
     }
 
     self.baseURL = url;
 
+    // 默认 http 请求序列化对象
     self.requestSerializer = [AFHTTPRequestSerializer serializer];
+    // 默认 json 结果序列化对象
     self.responseSerializer = [AFJSONResponseSerializer serializer];
 
     return self;
 }
 
 #pragma mark -
-
+// 请求序列化对象 setter 方法
 - (void)setRequestSerializer:(AFHTTPRequestSerializer <AFURLRequestSerialization> *)requestSerializer {
+    // 使用断言
     NSParameterAssert(requestSerializer);
 
     _requestSerializer = requestSerializer;
 }
 
+// 响应结果序列化对象 setter 方法
 - (void)setResponseSerializer:(AFHTTPResponseSerializer <AFURLResponseSerialization> *)responseSerializer {
+    // 使用断言
     NSParameterAssert(responseSerializer);
 
+    // 调用父类 setter 方法
     [super setResponseSerializer:responseSerializer];
 }
 
+// securityPolicy 的 setter getter 自己实现
 @dynamic securityPolicy;
 
+// 实现 securityPolicy 的 setter 方法
 - (void)setSecurityPolicy:(AFSecurityPolicy *)securityPolicy {
     if (securityPolicy.SSLPinningMode != AFSSLPinningModeNone && ![self.baseURL.scheme isEqualToString:@"https"]) {
+        // 不是 https， 并且 securityPolicy.SSLPinningMode 不是 AFSSLPinningModeNone，为无效安全策略，抛出异常，
         NSString *pinningMode = @"Unknown Pinning Mode";
         switch (securityPolicy.SSLPinningMode) {
             case AFSSLPinningModeNone:        pinningMode = @"AFSSLPinningModeNone"; break;
@@ -112,6 +124,7 @@
         @throw [NSException exceptionWithName:@"Invalid Security Policy" reason:reason userInfo:nil];
     }
 
+    // 设置父类中暴露的安全策略对象
     [super setSecurityPolicy:securityPolicy];
 }
 
@@ -124,7 +137,7 @@
                       success:(nullable void (^)(NSURLSessionDataTask * _Nonnull, id _Nullable))success
                       failure:(nullable void (^)(NSURLSessionDataTask * _Nullable, NSError * _Nonnull))failure
 {
-    
+    // 获取 dataTask 对象
     NSURLSessionDataTask *dataTask = [self dataTaskWithHTTPMethod:@"GET"
                                                         URLString:URLString
                                                        parameters:parameters
@@ -133,7 +146,7 @@
                                                  downloadProgress:downloadProgress
                                                           success:success
                                                           failure:failure];
-    
+    // dataTask 开始执行
     [dataTask resume];
     
     return dataTask;
@@ -259,12 +272,16 @@
                                          failure:(nullable void (^)(NSURLSessionDataTask * _Nullable task, NSError *error))failure
 {
     NSError *serializationError = nil;
+    // 进行序列化，获得 request 对象
     NSMutableURLRequest *request = [self.requestSerializer requestWithMethod:method URLString:[[NSURL URLWithString:URLString relativeToURL:self.baseURL] absoluteString] parameters:parameters error:&serializationError];
+    // 将参数 headers setValue 到 request 中
     for (NSString *headerField in headers.keyEnumerator) {
         [request setValue:headers[headerField] forHTTPHeaderField:headerField];
     }
     if (serializationError) {
+        // 序列化出错
         if (failure) {
+            // 在 self.completionQueue 或 主队列中 执行错误回调
             dispatch_async(self.completionQueue ?: dispatch_get_main_queue(), ^{
                 failure(nil, serializationError);
             });
@@ -274,16 +291,21 @@
     }
 
     __block NSURLSessionDataTask *dataTask = nil;
+    // 创建 dataTask 对象
     dataTask = [self dataTaskWithRequest:request
                           uploadProgress:uploadProgress
                         downloadProgress:downloadProgress
                        completionHandler:^(NSURLResponse * __unused response, id responseObject, NSError *error) {
         if (error) {
+            // 存在错误
             if (failure) {
+                // 执行错误回调
                 failure(dataTask, error);
             }
         } else {
+            // 成功
             if (success) {
+                // 执行成功回调
                 success(dataTask, responseObject);
             }
         }
