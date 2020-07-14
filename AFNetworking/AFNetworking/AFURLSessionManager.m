@@ -349,6 +349,7 @@ static inline void af_swizzleSelector(Class theClass, SEL originalSelector, SEL 
     method_exchangeImplementations(originalMethod, swizzledMethod);
 }
 
+// 给类对象添加方法
 static inline BOOL af_addMethod(Class theClass, SEL selector, Method method) {
     return class_addMethod(theClass, selector,  method_getImplementation(method),  method_getTypeEncoding(method));
 }
@@ -368,6 +369,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
      https://github.com/AFNetworking/AFNetworking/pull/2702
      */
 
+    // 存在 NSURLSessionTask 类
     if (NSClassFromString(@"NSURLSessionTask")) {
         /**
          iOS 7 and iOS 8 differ in NSURLSessionTask implementation, which makes the next bit of code a bit tricky.
@@ -395,44 +397,63 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
             7) If the current class implementation of `resume` is not equal to the super class implementation of `resume` AND the current implementation of `resume` is not equal to the original implementation of `af_resume`, THEN swizzle the methods
             8) Set the current class to the super class, and repeat steps 3-8
          */
+        // 创建临时 configuration
         NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+        // 创建 session
         NSURLSession *session = [NSURLSession sessionWithConfiguration:configuration];
+// 预编译指令，避免发生编译器警告
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wnonnull"
+        // 创建 dataTask
         NSURLSessionDataTask *localDataTask = [session dataTaskWithURL:nil];
 #pragma clang diagnostic pop
+        // 获取 af_resume 的 imp
         IMP originalAFResumeIMP = method_getImplementation(class_getInstanceMethod([self class], @selector(af_resume)));
         Class currentClass = [localDataTask class];
         
+        // currentClass 类 存在 resume 方法的实现
         while (class_getInstanceMethod(currentClass, @selector(resume))) {
+            // 获取父类
             Class superClass = [currentClass superclass];
             IMP classResumeIMP = method_getImplementation(class_getInstanceMethod(currentClass, @selector(resume)));
             IMP superclassResumeIMP = method_getImplementation(class_getInstanceMethod(superClass, @selector(resume)));
+            // 当 currentClass 父类 与 currentClass 类的 resume 方法实现不同，并且与 af_resume 的方法实现不同
             if (classResumeIMP != superclassResumeIMP &&
                 originalAFResumeIMP != classResumeIMP) {
+                // 进行方法交互
                 [self swizzleResumeAndSuspendMethodForClass:currentClass];
             }
+            // 当前类变为当前类的父类
             currentClass = [currentClass superclass];
         }
         
+        // task 取消
         [localDataTask cancel];
+        // session 完成并失效
         [session finishTasksAndInvalidate];
     }
 }
 
 + (void)swizzleResumeAndSuspendMethodForClass:(Class)theClass {
+    // self 对象的 af_resume 方法
     Method afResumeMethod = class_getInstanceMethod(self, @selector(af_resume));
+    // self 对象的 af_suspend 方法
     Method afSuspendMethod = class_getInstanceMethod(self, @selector(af_suspend));
 
+    // 给 theClass 添加 af_resume 方法
     if (af_addMethod(theClass, @selector(af_resume), afResumeMethod)) {
+        // theClass 类对象进行方法交互
         af_swizzleSelector(theClass, @selector(resume), @selector(af_resume));
     }
 
+    // 给 theClass 添加 af_suspend 方法
     if (af_addMethod(theClass, @selector(af_suspend), afSuspendMethod)) {
+        // theClass 类对象进行方法交互
         af_swizzleSelector(theClass, @selector(suspend), @selector(af_suspend));
     }
 }
 
+// 这个方法是不会被调用到的
 - (NSURLSessionTaskState)state {
     NSAssert(NO, @"State method should never be called in the actual dummy class");
     return NSURLSessionTaskStateCanceling;
@@ -440,20 +461,28 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 
 - (void)af_resume {
     NSAssert([self respondsToSelector:@selector(state)], @"Does not respond to state");
+    // 由于进行了方法交互，self 是 NSURLSessionDataTask 对象，
+    // 所以 [self state] 执行的是 NSURLSessionDataTask 对象中的方法
     NSURLSessionTaskState state = [self state];
+    // 调用原始恢复方法
     [self af_resume];
     
     if (state != NSURLSessionTaskStateRunning) {
+        // 发送恢复通知
         [[NSNotificationCenter defaultCenter] postNotificationName:AFNSURLSessionTaskDidResumeNotification object:self];
     }
 }
 
 - (void)af_suspend {
     NSAssert([self respondsToSelector:@selector(state)], @"Does not respond to state");
+    // 由于进行了方法交互，self 是 NSURLSessionDataTask 对象，
+    // 所以 [self state] 执行的是 NSURLSessionDataTask 对象中的方法
     NSURLSessionTaskState state = [self state];
+    // 调用原始暂停方法
     [self af_suspend];
     
     if (state != NSURLSessionTaskStateSuspended) {
+        // 发送暂停通知
         [[NSNotificationCenter defaultCenter] postNotificationName:AFNSURLSessionTaskDidSuspendNotification object:self];
     }
 }
@@ -527,6 +556,8 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
     self.lock = [[NSLock alloc] init];
     self.lock.name = AFURLSessionManagerLockName;
 
+    // 从 session 中异步获取所有未完成的 task ,
+    // 在 completionHandler 回调中，为了防止进入前台时，通过 session id 恢复的 task 导致一些崩溃问题，所以这里将之前的task进行遍历，并将回调都置nil。
     [self.session getTasksWithCompletionHandler:^(NSArray *dataTasks, NSArray *uploadTasks, NSArray *downloadTasks) {
         // dataTask
         for (NSURLSessionDataTask *task in dataTasks) {
@@ -785,7 +816,9 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 }
 
 #pragma mark -
+// 下面 通过6种系统方法，来分别创建 dataTask、uploadTask、downloadTask
 
+// dataTask，通过 AFHTTPSessionManager 传的 request 生成 dataTask，并将 dataTask 加入到 taskDelegate 中
 - (NSURLSessionDataTask *)dataTaskWithRequest:(NSURLRequest *)request
                                uploadProgress:(nullable void (^)(NSProgress *uploadProgress)) uploadProgressBlock
                              downloadProgress:(nullable void (^)(NSProgress *downloadProgress)) downloadProgressBlock
@@ -794,7 +827,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
     // 根据 request 创建 dataTask 对象
     NSURLSessionDataTask *dataTask = [self.session dataTaskWithRequest:request];
 
-    //
+    // 添加到 taskDelegate 对象
     [self addDelegateForDataTask:dataTask uploadProgress:uploadProgressBlock downloadProgress:downloadProgressBlock completionHandler:completionHandler];
 
     // 返回 dataTask 对象
@@ -803,14 +836,18 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 
 #pragma mark -
 
+// uploadTask，此方法没有被 AFHTTPSessionManager 调用，用户可以直接使用
 - (NSURLSessionUploadTask *)uploadTaskWithRequest:(NSURLRequest *)request
                                          fromFile:(NSURL *)fileURL
                                          progress:(void (^)(NSProgress *uploadProgress)) uploadProgressBlock
                                 completionHandler:(void (^)(NSURLResponse *response, id responseObject, NSError *error))completionHandler
 {
+    // 根据 request 与 fileURL 创建 uploadTask 对象
     NSURLSessionUploadTask *uploadTask = [self.session uploadTaskWithRequest:request fromFile:fileURL];
     
     if (uploadTask) {
+        // uploadTask 不为 nil
+        // 添加到 taskDelegate 对象
         [self addDelegateForUploadTask:uploadTask
                               progress:uploadProgressBlock
                      completionHandler:completionHandler];
@@ -819,24 +856,30 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
     return uploadTask;
 }
 
+// uploadTask，此方法没有被 AFHTTPSessionManager 调用，用户可以直接使用
 - (NSURLSessionUploadTask *)uploadTaskWithRequest:(NSURLRequest *)request
                                          fromData:(NSData *)bodyData
                                          progress:(void (^)(NSProgress *uploadProgress)) uploadProgressBlock
                                 completionHandler:(void (^)(NSURLResponse *response, id responseObject, NSError *error))completionHandler
 {
+    // 根据 request 与 bodyData 创建 uploadTask 对象
     NSURLSessionUploadTask *uploadTask = [self.session uploadTaskWithRequest:request fromData:bodyData];
     
+    // 添加到 taskDelegate 对象
     [self addDelegateForUploadTask:uploadTask progress:uploadProgressBlock completionHandler:completionHandler];
 
     return uploadTask;
 }
 
+// uploadTask，通过 AFHTTPSessionManager 传的 request 生成 uploadTask，并将 uploadTask 加入到 taskDelegate 中
 - (NSURLSessionUploadTask *)uploadTaskWithStreamedRequest:(NSURLRequest *)request
                                                  progress:(void (^)(NSProgress *uploadProgress)) uploadProgressBlock
                                         completionHandler:(void (^)(NSURLResponse *response, id responseObject, NSError *error))completionHandler
 {
+    // 根据 request 创建 uploadTask 对象
     NSURLSessionUploadTask *uploadTask = [self.session uploadTaskWithStreamedRequest:request];
 
+    // 添加到 taskDelegate 对象
     [self addDelegateForUploadTask:uploadTask progress:uploadProgressBlock completionHandler:completionHandler];
 
     return uploadTask;
@@ -844,25 +887,31 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 
 #pragma mark -
 
+// uploadTask，此方法没有被 AFHTTPSessionManager 调用，用户可以直接使用
 - (NSURLSessionDownloadTask *)downloadTaskWithRequest:(NSURLRequest *)request
                                              progress:(void (^)(NSProgress *downloadProgress)) downloadProgressBlock
                                           destination:(NSURL * (^)(NSURL *targetPath, NSURLResponse *response))destination
                                     completionHandler:(void (^)(NSURLResponse *response, NSURL *filePath, NSError *error))completionHandler
 {
+    // 根据 request 创建 downloadTask 对象
     NSURLSessionDownloadTask *downloadTask = [self.session downloadTaskWithRequest:request];
     
+    // 添加到 taskDelegate 对象
     [self addDelegateForDownloadTask:downloadTask progress:downloadProgressBlock destination:destination completionHandler:completionHandler];
 
     return downloadTask;
 }
 
+// uploadTask，此方法没有被 AFHTTPSessionManager 调用，用户可以直接使用
 - (NSURLSessionDownloadTask *)downloadTaskWithResumeData:(NSData *)resumeData
                                                 progress:(void (^)(NSProgress *downloadProgress)) downloadProgressBlock
                                              destination:(NSURL * (^)(NSURL *targetPath, NSURLResponse *response))destination
                                        completionHandler:(void (^)(NSURLResponse *response, NSURL *filePath, NSError *error))completionHandler
 {
+    // 根据 resumeData 创建 downloadTask 对象
     NSURLSessionDownloadTask *downloadTask = [self.session downloadTaskWithResumeData:resumeData];
 
+    // 添加到 taskDelegate 对象
     [self addDelegateForDownloadTask:downloadTask progress:downloadProgressBlock destination:destination completionHandler:completionHandler];
 
     return downloadTask;
