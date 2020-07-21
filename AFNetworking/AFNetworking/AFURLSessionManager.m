@@ -343,6 +343,7 @@ didFinishDownloadingToURL:(NSURL *)location
  *  - https://github.com/AFNetworking/AFNetworking/pull/2702
  */
 
+// 方法交互
 static inline void af_swizzleSelector(Class theClass, SEL originalSelector, SEL swizzledSelector) {
     Method originalMethod = class_getInstanceMethod(theClass, originalSelector);
     Method swizzledMethod = class_getInstanceMethod(theClass, swizzledSelector);
@@ -420,7 +421,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
             // 当 currentClass 父类 与 currentClass 类的 resume 方法实现不同，并且与 af_resume 的方法实现不同
             if (classResumeIMP != superclassResumeIMP &&
                 originalAFResumeIMP != classResumeIMP) {
-                // 进行方法交互
+                // 对 currentClass 的 resume 与 suspend 方法进行方法交互
                 [self swizzleResumeAndSuspendMethodForClass:currentClass];
             }
             // 当前类变为当前类的父类
@@ -461,12 +462,13 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 
 - (void)af_resume {
     NSAssert([self respondsToSelector:@selector(state)], @"Does not respond to state");
-    // 由于进行了方法交互，self 是 NSURLSessionDataTask 对象，
-    // 所以 [self state] 执行的是 NSURLSessionDataTask 对象中的方法
+    // 由于改方法添加到 NSURLSessionDataTask 类及其父类中，并进行了方法交互，所以当本需要执行 resume 方法时，会执行该方法，self 是 NSURLSessionDataTask 对象或其父类对象，
+    // 所以 [self state] 执行的是 NSURLSessionDataTask 对象或其父类对象中的 state 方法
     NSURLSessionTaskState state = [self state];
-    // 调用原始恢复方法
+    // 调用原始恢复方法，task 的 state 将变为 running
     [self af_resume];
     
+    // state 为调用原始恢复方法前获取，所以不是 running
     if (state != NSURLSessionTaskStateRunning) {
         // 发送恢复通知
         [[NSNotificationCenter defaultCenter] postNotificationName:AFNSURLSessionTaskDidResumeNotification object:self];
@@ -475,12 +477,13 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 
 - (void)af_suspend {
     NSAssert([self respondsToSelector:@selector(state)], @"Does not respond to state");
-    // 由于进行了方法交互，self 是 NSURLSessionDataTask 对象，
-    // 所以 [self state] 执行的是 NSURLSessionDataTask 对象中的方法
+    // 由于改方法添加到 NSURLSessionDataTask 类及其父类中，并进行了方法交互，所以当本需要执行 suspend 方法时，会执行该方法，self 是 NSURLSessionDataTask 对象或其父类对象，
+    // 所以 [self state] 执行的是 NSURLSessionDataTask 对象或其父类对象中的 state 方法
     NSURLSessionTaskState state = [self state];
-    // 调用原始暂停方法
+    // 调用原始暂停方法，task 的 state 将变为 suspended
     [self af_suspend];
     
+    // state 为调用原始暂停方法前获取，所以不是 suspended
     if (state != NSURLSessionTaskStateSuspended) {
         // 发送暂停通知
         [[NSNotificationCenter defaultCenter] postNotificationName:AFNSURLSessionTaskDidSuspendNotification object:self];
@@ -536,7 +539,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 
     self.sessionConfiguration = configuration;
 
-    // 创建队列，最大并发数为1
+    // 创建队列，最大并发数为1，用于创建 NSURLSession 对象
     self.operationQueue = [[NSOperationQueue alloc] init];
     self.operationQueue.maxConcurrentOperationCount = 1;
 
@@ -579,6 +582,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 }
 
 - (void)dealloc {
+    //  移除所有通知
     [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
@@ -588,7 +592,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
     // 使用 @synchronized 锁
     @synchronized (self) {
         if (!_session) {
-            // 创建 NSURLSession 对象，参数为 configuration、 self、最大并发数为1的队列
+            // 创建 NSURLSession 对象，参数为 configuration、 self、最大并发数为1的队列，通过 _session 创建的所有 task 的代理方法 或 block 完成回调都将在 self.operationQueue 执行
             _session = [NSURLSession sessionWithConfiguration:self.sessionConfiguration delegate:self delegateQueue:self.operationQueue];
         }
     }
@@ -599,26 +603,38 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 
 
 - (NSString *)taskDescriptionForSessionTasks {
-    // 返回 self 内存地址
+    // 返回 self 对象内存地址
     return [NSString stringWithFormat:@"%p", self];
 }
 
+// task 恢复执行的通知方法
 - (void)taskDidResume:(NSNotification *)notification {
     NSURLSessionTask *task = notification.object;
     if ([task respondsToSelector:@selector(taskDescription)]) {
+        // task 可以调用 taskDescription 方法
         if ([task.taskDescription isEqualToString:self.taskDescriptionForSessionTasks]) {
+            // task.taskDescription 是本 AFURLSessionManager 对象的内存地址，
+            // task.taskDescription 在 addDelegateForDataTask 方法中设置的，目的是为保证 task 是本 AFURLSessionManager 对象中创建的
             dispatch_async(dispatch_get_main_queue(), ^{
+                // 主线程发送通知
+                // 在 AFNetworkActivityIndicatorManager、UIActivityIndicatorView+AFNetworking、UIRefreshControl+AFNetworking 中有注册此通知来使用
                 [[NSNotificationCenter defaultCenter] postNotificationName:AFNetworkingTaskDidResumeNotification object:task];
             });
         }
     }
 }
 
+// task 暂停执行的通知方法
 - (void)taskDidSuspend:(NSNotification *)notification {
     NSURLSessionTask *task = notification.object;
     if ([task respondsToSelector:@selector(taskDescription)]) {
+        // task 可以调用 taskDescription 方法
         if ([task.taskDescription isEqualToString:self.taskDescriptionForSessionTasks]) {
+            // task.taskDescription 是本 AFURLSessionManager 对象的内存地址，
+            // task.taskDescription 在 addDelegateForDataTask 方法中设置的，目的是为保证 task 是本 AFURLSessionManager 对象中创建的
             dispatch_async(dispatch_get_main_queue(), ^{
+                // 主线程发送通知
+                // 在 AFNetworkActivityIndicatorManager、UIActivityIndicatorView+AFNetworking、UIRefreshControl+AFNetworking 中有注册此通知来使用
                 [[NSNotificationCenter defaultCenter] postNotificationName:AFNetworkingTaskDidSuspendNotification object:task];
             });
         }
@@ -627,12 +643,17 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 
 #pragma mark -
 
+// 根据 task 获取对应的 taskDelegate 对象
 - (AFURLSessionManagerTaskDelegate *)delegateForTask:(NSURLSessionTask *)task {
+    // 使用断言 判断是否为nil
     NSParameterAssert(task);
 
     AFURLSessionManagerTaskDelegate *delegate = nil;
+    // 加锁
     [self.lock lock];
+    // 根据 task.taskIdentifier 从字典中取出 taskDelegate 对象
     delegate = self.mutableTaskDelegatesKeyedByTaskIdentifier[@(task.taskIdentifier)];
+    // 开锁
     [self.lock unlock];
 
     return delegate;
@@ -731,9 +752,13 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 - (void)removeDelegateForTask:(NSURLSessionTask *)task {
     NSParameterAssert(task);
 
+    // 加锁
     [self.lock lock];
+    // 移除 task 的两个通知
     [self removeNotificationObserverForTask:task];
+    // 从字典中，将 task 与对应的 taskDelegate 键值对移除
     [self.mutableTaskDelegatesKeyedByTaskIdentifier removeObjectForKey:@(task.taskIdentifier)];
+    // 解锁
     [self.lock unlock];
 }
 
@@ -741,51 +766,68 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 
 - (NSArray *)tasksForKeyPath:(NSString *)keyPath {
     __block NSArray *tasks = nil;
+    // 创建一个信号量为 0 的信号
     dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+    // 异步获取当前 session 所有未完成的 task
     [self.session getTasksWithCompletionHandler:^(NSArray *dataTasks, NSArray *uploadTasks, NSArray *downloadTasks) {
         if ([keyPath isEqualToString:NSStringFromSelector(@selector(dataTasks))]) {
+            // dataTasks 方法调用该方法
             tasks = dataTasks;
         } else if ([keyPath isEqualToString:NSStringFromSelector(@selector(uploadTasks))]) {
+            // uploadTasks 方法调用该方法
             tasks = uploadTasks;
         } else if ([keyPath isEqualToString:NSStringFromSelector(@selector(downloadTasks))]) {
+            // downloadTasks 方法调用该方法
             tasks = downloadTasks;
         } else if ([keyPath isEqualToString:NSStringFromSelector(@selector(tasks))]) {
+            // tasks 方法调用该方法
+            // 利用 valueForKeyPath 合并数组并保留重复值
             tasks = [@[dataTasks, uploadTasks, downloadTasks] valueForKeyPath:@"@unionOfArrays.self"];
         }
 
+        // semaphore 的信号量加1，semaphore 的信号量为1了，实现解锁
         dispatch_semaphore_signal(semaphore);
     }];
 
+    // semaphore 的信号量需要减1，因为信号量为0，所以实现加锁
     dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
 
     return tasks;
 }
 
+// 获取当前 sessionManager 中的所有 task
 - (NSArray *)tasks {
+    // _cmd 代表当前方法的 selector
     return [self tasksForKeyPath:NSStringFromSelector(_cmd)];
 }
 
+// 获取当前 sessionManager 中的 dataTask
 - (NSArray *)dataTasks {
     return [self tasksForKeyPath:NSStringFromSelector(_cmd)];
 }
 
+// 获取当前 sessionManager 中的 uploadTask
 - (NSArray *)uploadTasks {
     return [self tasksForKeyPath:NSStringFromSelector(_cmd)];
 }
 
+// 获取当前 sessionManager 中的 downloadTask
 - (NSArray *)downloadTasks {
     return [self tasksForKeyPath:NSStringFromSelector(_cmd)];
 }
 
 #pragma mark -
-
+// 使 session 失效
 - (void)invalidateSessionCancelingTasks:(BOOL)cancelPendingTasks resetSession:(BOOL)resetSession {
     if (cancelPendingTasks) {
+        // 使 self.session 立即失效
         [self.session invalidateAndCancel];
     } else {
+        // 使 self.session 等待未完成的task完成后失效
         [self.session finishTasksAndInvalidate];
     }
     if (resetSession) {
+        // 重置 self.session，设置 self.session 为 nil
         self.session = nil;
     }
 }
@@ -918,20 +960,23 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 }
 
 #pragma mark -
+// 根据 task 获取对应的上传进度条
 - (NSProgress *)uploadProgressForTask:(NSURLSessionTask *)task {
     return [[self delegateForTask:task] uploadProgress];
 }
 
+// 根据 task 获取对应的下载进度条
 - (NSProgress *)downloadProgressForTask:(NSURLSessionTask *)task {
     return [[self delegateForTask:task] downloadProgress];
 }
 
 #pragma mark -
-
+//  设置当 session 无效时的block回调，在 URLSession:didBecomeInvalidWithError: 中被调用
 - (void)setSessionDidBecomeInvalidBlock:(void (^)(NSURLSession *session, NSError *error))block {
     self.sessionDidBecomeInvalid = block;
 }
 
+// 设置当 session 接收到验证请求时的block回调，在 URLSession:didReceiveChallenge:completionHandler: 中被调用
 - (void)setSessionDidReceiveAuthenticationChallengeBlock:(NSURLSessionAuthChallengeDisposition (^)(NSURLSession *session, NSURLAuthenticationChallenge *challenge, NSURLCredential * __autoreleasing *credential))block {
     self.sessionDidReceiveAuthenticationChallenge = block;
 }
