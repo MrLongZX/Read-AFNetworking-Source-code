@@ -87,6 +87,7 @@ typedef void (^AFURLSessionTaskCompletionHandler)(NSURLResponse *response, id re
 
 #pragma mark -
 
+// 遵循 NSURLSession 的三个代理
 @interface AFURLSessionManagerTaskDelegate : NSObject <NSURLSessionTaskDelegate, NSURLSessionDataDelegate, NSURLSessionDownloadDelegate>
 - (instancetype)initWithTask:(NSURLSessionTask *)task;
 @property (nonatomic, weak) AFURLSessionManager *manager;
@@ -462,7 +463,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 
 - (void)af_resume {
     NSAssert([self respondsToSelector:@selector(state)], @"Does not respond to state");
-    // 由于改方法添加到 NSURLSessionDataTask 类及其父类中，并进行了方法交互，所以当本需要执行 resume 方法时，会执行该方法，self 是 NSURLSessionDataTask 对象或其父类对象，
+    // 由于该方法添加到 NSURLSessionDataTask 类及其父类中，并进行了方法交互，所以当本需要执行 resume 方法时，会执行该方法，self 是 NSURLSessionDataTask 对象或其父类对象，
     // 所以 [self state] 执行的是 NSURLSessionDataTask 对象或其父类对象中的 state 方法
     NSURLSessionTaskState state = [self state];
     // 调用原始恢复方法，task 的 state 将变为 running
@@ -477,7 +478,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 
 - (void)af_suspend {
     NSAssert([self respondsToSelector:@selector(state)], @"Does not respond to state");
-    // 由于改方法添加到 NSURLSessionDataTask 类及其父类中，并进行了方法交互，所以当本需要执行 suspend 方法时，会执行该方法，self 是 NSURLSessionDataTask 对象或其父类对象，
+    // 由于该方法添加到 NSURLSessionDataTask 类及其父类中，并进行了方法交互，所以当本需要执行 suspend 方法时，会执行该方法，self 是 NSURLSessionDataTask 对象或其父类对象，
     // 所以 [self state] 执行的是 NSURLSessionDataTask 对象或其父类对象中的 state 方法
     NSURLSessionTaskState state = [self state];
     // 调用原始暂停方法，task 的 state 将变为 suspended
