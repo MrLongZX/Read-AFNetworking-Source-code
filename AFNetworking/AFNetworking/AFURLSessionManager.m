@@ -171,13 +171,13 @@ typedef void (^AFURLSessionTaskCompletionHandler)(NSURLResponse *response, id re
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary<NSString *,id> *)change context:(void *)context {
    if ([object isEqual:self.downloadProgress]) {
         if (self.downloadProgressBlock) {
-            // 调用下载进度回调
+            // 调用下载进度回调,回调下载进度条对象
             self.downloadProgressBlock(object);
         }
     }
     else if ([object isEqual:self.uploadProgress]) {
         if (self.uploadProgressBlock) {
-            // 调用上传进度回调
+            // 调用上传进度回调,回调上传进度条对象
             self.uploadProgressBlock(object);
         }
     }
@@ -187,75 +187,103 @@ static const void * const AuthenticationChallengeErrorKey = &AuthenticationChall
 
 #pragma mark - NSURLSessionTaskDelegate
 
+// session 完成任务
+// 此代理方法在 AFURLSessionManager 中的同名代理方法中被调用
 - (void)URLSession:(__unused NSURLSession *)session
               task:(NSURLSessionTask *)task
 didCompleteWithError:(NSError *)error
 {
+    // 通过关联对象方式,获取授权失败信息,如果存在,则使用授权失败信息,否则使用代理方法返回的error
     error = objc_getAssociatedObject(task, AuthenticationChallengeErrorKey) ?: error;
+    // 当前 AFURLSessionManager 对象
     __strong AFURLSessionManager *manager = self.manager;
 
     __block id responseObject = nil;
 
+    // 新建 userInfo 字典对象,用于保存一些信息,给通知传递信息使用
     NSMutableDictionary *userInfo = [NSMutableDictionary dictionary];
+    // 保存响应序列化对象
     userInfo[AFNetworkingTaskDidCompleteResponseSerializerKey] = manager.responseSerializer;
 
     //Performance Improvement from #2672
     NSData *data = nil;
     if (self.mutableData) {
+        // 如果 self.mutableData 不为空,则将数据 copy 给临时变量 data
         data = [self.mutableData copy];
         //We no longer need the reference, so nil it out to gain back some memory.
+        // 设置为nil,释放获取一些内存
         self.mutableData = nil;
     }
 
 #if AF_CAN_USE_AT_AVAILABLE && AF_CAN_INCLUDE_SESSION_TASK_METRICS
     if (@available(iOS 10, macOS 10.12, watchOS 3, tvOS 10, *)) {
         if (self.sessionTaskMetrics) {
+            // 保存task指标
             userInfo[AFNetworkingTaskDidCompleteSessionTaskMetrics] = self.sessionTaskMetrics;
         }
     }
 #endif
 
     if (self.downloadFileURL) {
+        // 保存下载文件路径
         userInfo[AFNetworkingTaskDidCompleteAssetPathKey] = self.downloadFileURL;
     } else if (data) {
+        // 保存响应数据
         userInfo[AFNetworkingTaskDidCompleteResponseDataKey] = data;
     }
 
     if (error) {
+        // 请求存在 error
+        // 保存错误信息
         userInfo[AFNetworkingTaskDidCompleteErrorKey] = error;
 
+        // 如果开发者没有提供 completionGroup、completionQueue,则使用默认创建的 group 与 主队列
+        // 使用 dispatch_group_async,应该是留给开发者使用 dispatch_group_notify 的方式,来监听 completionGroup 中所有任务的完成
         dispatch_group_async(manager.completionGroup ?: url_session_manager_completion_group(), manager.completionQueue ?: dispatch_get_main_queue(), ^{
             if (self.completionHandler) {
+                // 调用完成回调
                 self.completionHandler(task.response, responseObject, error);
             }
 
             dispatch_async(dispatch_get_main_queue(), ^{
+                // 主线程 发送 task 完成通知,
+                // 在 AFNetworkActivityIndicatorManager、UIActivityIndicatorView+AFNetworking、UIRefreshControl+AFNetworking 中有注册此通知来使用
                 [[NSNotificationCenter defaultCenter] postNotificationName:AFNetworkingTaskDidCompleteNotification object:task userInfo:userInfo];
             });
         });
     } else {
+        // 请求成功
         dispatch_async(url_session_manager_processing_queue(), ^{
             NSError *serializationError = nil;
+            // 使用响应序列化对象,对返回内容进行序列化
             responseObject = [manager.responseSerializer responseObjectForResponse:task.response data:data error:&serializationError];
 
             if (self.downloadFileURL) {
+                // 如果存在 downloadFileURL(下载文件地址),则返回文件下载地址
                 responseObject = self.downloadFileURL;
             }
 
             if (responseObject) {
+                // 保存序列化结果对象
                 userInfo[AFNetworkingTaskDidCompleteSerializedResponseKey] = responseObject;
             }
 
             if (serializationError) {
+                // 保存序列化error
                 userInfo[AFNetworkingTaskDidCompleteErrorKey] = serializationError;
             }
 
+            // 如果开发者没有提供 completionGroup、completionQueue,则使用默认创建的 group 与 主队列
+            // 使用 dispatch_group_async,应该是留给开发者使用 dispatch_group_notify 的方式,来监听 completionGroup 中所有任务的完成
             dispatch_group_async(manager.completionGroup ?: url_session_manager_completion_group(), manager.completionQueue ?: dispatch_get_main_queue(), ^{
                 if (self.completionHandler) {
+                    // 调用完成回调
                     self.completionHandler(task.response, responseObject, serializationError);
                 }
 
                 dispatch_async(dispatch_get_main_queue(), ^{
+                    // 主线程 发送 task 完成通知,
+                    // 在 AFNetworkActivityIndicatorManager、UIActivityIndicatorView+AFNetworking、UIRefreshControl+AFNetworking 中有注册此通知来使用
                     [[NSNotificationCenter defaultCenter] postNotificationName:AFNetworkingTaskDidCompleteNotification object:task userInfo:userInfo];
                 });
             });
@@ -264,25 +292,34 @@ didCompleteWithError:(NSError *)error
 }
 
 #if AF_CAN_INCLUDE_SESSION_TASK_METRICS
+// session 完成 task 指标收集
+// 此代理方法在 AFURLSessionManager 中的同名代理方法中被调用
 - (void)URLSession:(NSURLSession *)session
               task:(NSURLSessionTask *)task
 didFinishCollectingMetrics:(NSURLSessionTaskMetrics *)metrics AF_API_AVAILABLE(ios(10), macosx(10.12), watchos(3), tvos(10)) {
+    // 保存 task 指标
     self.sessionTaskMetrics = metrics;
 }
 #endif
 
 #pragma mark - NSURLSessionDataDelegate
 
+// session 接受到服务器数据
+// 此代理方法在 AFURLSessionManager 中的同名代理方法中被调用
 - (void)URLSession:(__unused NSURLSession *)session
           dataTask:(__unused NSURLSessionDataTask *)dataTask
     didReceiveData:(NSData *)data
 {
+    // 更新下载进度条总下载量
     self.downloadProgress.totalUnitCount = dataTask.countOfBytesExpectedToReceive;
+    // 更新下载进度条已完成下载量
     self.downloadProgress.completedUnitCount = dataTask.countOfBytesReceived;
 
+    // 保存本次下载返回的数据
     [self.mutableData appendData:data];
 }
 
+// 此代理方法在 AFURLSessionManager 中的同名代理方法中被调用
 - (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task
    didSendBodyData:(int64_t)bytesSent
     totalBytesSent:(int64_t)totalBytesSent
@@ -294,6 +331,7 @@ totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend{
 
 #pragma mark - NSURLSessionDownloadDelegate
 
+// 此代理方法在 AFURLSessionManager 中的同名代理方法中被调用
 - (void)URLSession:(NSURLSession *)session downloadTask:(NSURLSessionDownloadTask *)downloadTask
       didWriteData:(int64_t)bytesWritten
  totalBytesWritten:(int64_t)totalBytesWritten
@@ -303,6 +341,7 @@ totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite{
     self.downloadProgress.completedUnitCount = totalBytesWritten;
 }
 
+// 此代理方法在 AFURLSessionManager 中的同名代理方法中被调用
 - (void)URLSession:(NSURLSession *)session downloadTask:(NSURLSessionDownloadTask *)downloadTask
  didResumeAtOffset:(int64_t)fileOffset
 expectedTotalBytes:(int64_t)expectedTotalBytes{
@@ -311,20 +350,27 @@ expectedTotalBytes:(int64_t)expectedTotalBytes{
     self.downloadProgress.completedUnitCount = fileOffset;
 }
 
+// session 完成下载
+// 此代理方法在 AFURLSessionManager 中的同名代理方法中被调用
 - (void)URLSession:(NSURLSession *)session
       downloadTask:(NSURLSessionDownloadTask *)downloadTask
 didFinishDownloadingToURL:(NSURL *)location
 {
+    // 下载文件地址置空
     self.downloadFileURL = nil;
 
     if (self.downloadTaskDidFinishDownloading) {
+        // 调用downloadTaskDidFinishDownloading,获取文件下载目标地址
         self.downloadFileURL = self.downloadTaskDidFinishDownloading(session, downloadTask, location);
         if (self.downloadFileURL) {
             NSError *fileManagerError = nil;
 
+            // 处理下载文件路径
             if (![[NSFileManager defaultManager] moveItemAtURL:location toURL:self.downloadFileURL error:&fileManagerError]) {
+                // 发送移动下载文件失败通知
                 [[NSNotificationCenter defaultCenter] postNotificationName:AFURLSessionDownloadTaskDidFailToMoveFileNotification object:downloadTask userInfo:fileManagerError.userInfo];
             } else {
+                // 发送移动下载文件成功通知
                 [[NSNotificationCenter defaultCenter] postNotificationName:AFURLSessionDownloadTaskDidMoveFileSuccessfullyNotification object:downloadTask userInfo:nil];
             }
         }
@@ -733,8 +779,8 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
     // 设置完成回调
     delegate.completionHandler = completionHandler;
 
-    // 
     if (destination) {
+        // 获取下载文件目标地址block
         delegate.downloadTaskDidFinishDownloading = ^NSURL * (NSURLSession * __unused session, NSURLSessionDownloadTask *task, NSURL *location) {
             return destination(location, task.response);
         };
@@ -930,7 +976,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 
 #pragma mark -
 
-// uploadTask，此方法没有被 AFHTTPSessionManager 调用，用户可以直接使用
+// downloadTask，此方法没有被 AFHTTPSessionManager 调用，用户可以直接使用
 - (NSURLSessionDownloadTask *)downloadTaskWithRequest:(NSURLRequest *)request
                                              progress:(void (^)(NSProgress *downloadProgress)) downloadProgressBlock
                                           destination:(NSURL * (^)(NSURL *targetPath, NSURLResponse *response))destination
@@ -945,7 +991,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
     return downloadTask;
 }
 
-// uploadTask，此方法没有被 AFHTTPSessionManager 调用，用户可以直接使用
+// downloadTask，此方法没有被 AFHTTPSessionManager 调用，用户可以直接使用
 - (NSURLSessionDownloadTask *)downloadTaskWithResumeData:(NSData *)resumeData
                                                 progress:(void (^)(NSProgress *downloadProgress)) downloadProgressBlock
                                              destination:(NSURL * (^)(NSURL *targetPath, NSURLResponse *response))destination
@@ -983,6 +1029,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 }
 
 #if !TARGET_OS_OSX
+// 设置当 session 
 - (void)setDidFinishEventsForBackgroundURLSessionBlock:(void (^)(NSURLSession *session))block {
     self.didFinishEventsForBackgroundURLSession = block;
 }
@@ -1071,10 +1118,12 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 
 #pragma mark - NSURLSessionDelegate
 
+// session 将要无效
 - (void)URLSession:(NSURLSession *)session
 didBecomeInvalidWithError:(NSError *)error
 {
     if (self.sessionDidBecomeInvalid) {
+        // 如果设置了 sessionDidBecomeInvalid,则调用
         self.sessionDidBecomeInvalid(session, error);
     }
 
@@ -1218,9 +1267,11 @@ totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend
         }
     }
     
+    // 获取 task 对应的 taskDelegate 对象
     AFURLSessionManagerTaskDelegate *delegate = [self delegateForTask:task];
     
     if (delegate) {
+        // 调用 delegate 中的同名代理方法
         [delegate URLSession:session task:task didSendBodyData:bytesSent totalBytesSent:totalBytesSent totalBytesExpectedToSend:totalBytesExpectedToSend];
     }
 
@@ -1233,10 +1284,12 @@ totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend
               task:(NSURLSessionTask *)task
 didCompleteWithError:(NSError *)error
 {
+    // 获取 task 对应的 taskDelegate 对象
     AFURLSessionManagerTaskDelegate *delegate = [self delegateForTask:task];
 
     // delegate may be nil when completing a task in the background
     if (delegate) {
+        // 调用 delegate 中的同名代理方法
         [delegate URLSession:session task:task didCompleteWithError:error];
 
         [self removeDelegateForTask:task];
@@ -1252,9 +1305,11 @@ didCompleteWithError:(NSError *)error
               task:(NSURLSessionTask *)task
 didFinishCollectingMetrics:(NSURLSessionTaskMetrics *)metrics AF_API_AVAILABLE(ios(10), macosx(10.12), watchos(3), tvos(10))
 {
+    // 获取 task 对应的 taskDelegate 对象
     AFURLSessionManagerTaskDelegate *delegate = [self delegateForTask:task];
     // Metrics may fire after URLSession:task:didCompleteWithError: is called, delegate may be nil
     if (delegate) {
+        // 调用 delegate 中的同名代理方法
         [delegate URLSession:session task:task didFinishCollectingMetrics:metrics];
     }
 
@@ -1286,6 +1341,7 @@ didReceiveResponse:(NSURLResponse *)response
           dataTask:(NSURLSessionDataTask *)dataTask
 didBecomeDownloadTask:(NSURLSessionDownloadTask *)downloadTask
 {
+    // 获取 task 对应的 taskDelegate 对象
     AFURLSessionManagerTaskDelegate *delegate = [self delegateForTask:dataTask];
     if (delegate) {
         [self removeDelegateForTask:dataTask];
@@ -1297,12 +1353,14 @@ didBecomeDownloadTask:(NSURLSessionDownloadTask *)downloadTask
     }
 }
 
+// session 接受到服务器数据
 - (void)URLSession:(NSURLSession *)session
           dataTask:(NSURLSessionDataTask *)dataTask
     didReceiveData:(NSData *)data
 {
-
+    // 获取 task 对应的 taskDelegate 对象
     AFURLSessionManagerTaskDelegate *delegate = [self delegateForTask:dataTask];
+    // 调用 delegate 中的同名代理方法
     [delegate URLSession:session dataTask:dataTask didReceiveData:data];
 
     if (self.dataTaskDidReceiveData) {
@@ -1342,16 +1400,22 @@ didBecomeDownloadTask:(NSURLSessionDownloadTask *)downloadTask
       downloadTask:(NSURLSessionDownloadTask *)downloadTask
 didFinishDownloadingToURL:(NSURL *)location
 {
+    // 获取 task 对应的 taskDelegate 对象
     AFURLSessionManagerTaskDelegate *delegate = [self delegateForTask:downloadTask];
     if (self.downloadTaskDidFinishDownloading) {
+        // 调用downloadTaskDidFinishDownloading,获取文件下载目标地址
         NSURL *fileURL = self.downloadTaskDidFinishDownloading(session, downloadTask, location);
         if (fileURL) {
+            // 设置 taskDelegate 文件下载目标地址
             delegate.downloadFileURL = fileURL;
             NSError *error = nil;
             
+            // 处理下载文件路径
             if (![[NSFileManager defaultManager] moveItemAtURL:location toURL:fileURL error:&error]) {
+                // 发送移动下载文件失败通知
                 [[NSNotificationCenter defaultCenter] postNotificationName:AFURLSessionDownloadTaskDidFailToMoveFileNotification object:downloadTask userInfo:error.userInfo];
             } else {
+                // 发送移动下载文件成功通知
                 [[NSNotificationCenter defaultCenter] postNotificationName:AFURLSessionDownloadTaskDidMoveFileSuccessfullyNotification object:downloadTask userInfo:nil];
             }
 
@@ -1360,6 +1424,7 @@ didFinishDownloadingToURL:(NSURL *)location
     }
 
     if (delegate) {
+        // 调用 delegate 中的同名代理方法
         [delegate URLSession:session downloadTask:downloadTask didFinishDownloadingToURL:location];
     }
 }
@@ -1370,10 +1435,11 @@ didFinishDownloadingToURL:(NSURL *)location
  totalBytesWritten:(int64_t)totalBytesWritten
 totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite
 {
-    
+    // 获取 task 对应的 taskDelegate 对象
     AFURLSessionManagerTaskDelegate *delegate = [self delegateForTask:downloadTask];
     
     if (delegate) {
+        // 调用 delegate 中的同名代理方法
         [delegate URLSession:session downloadTask:downloadTask didWriteData:bytesWritten totalBytesWritten:totalBytesWritten totalBytesExpectedToWrite:totalBytesExpectedToWrite];
     }
 
@@ -1387,10 +1453,11 @@ totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite
  didResumeAtOffset:(int64_t)fileOffset
 expectedTotalBytes:(int64_t)expectedTotalBytes
 {
-    
+    // 获取 task 对应的 taskDelegate 对象
     AFURLSessionManagerTaskDelegate *delegate = [self delegateForTask:downloadTask];
     
     if (delegate) {
+        // 调用 delegate 中的同名代理方法
         [delegate URLSession:session downloadTask:downloadTask didResumeAtOffset:fileOffset expectedTotalBytes:expectedTotalBytes];
     }
 
