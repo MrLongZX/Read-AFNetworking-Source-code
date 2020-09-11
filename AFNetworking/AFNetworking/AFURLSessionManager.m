@@ -319,34 +319,40 @@ didFinishCollectingMetrics:(NSURLSessionTaskMetrics *)metrics AF_API_AVAILABLE(i
     [self.mutableData appendData:data];
 }
 
+// session task 上传数据
 // 此代理方法在 AFURLSessionManager 中的同名代理方法中被调用
 - (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task
    didSendBodyData:(int64_t)bytesSent
     totalBytesSent:(int64_t)totalBytesSent
 totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend{
-    
+    // 更新上传进度条总上传量
     self.uploadProgress.totalUnitCount = task.countOfBytesExpectedToSend;
+    // 更新上传进度条已完成上传量
     self.uploadProgress.completedUnitCount = task.countOfBytesSent;
 }
 
 #pragma mark - NSURLSessionDownloadDelegate
 
+// session downloadTask 下载数据中
 // 此代理方法在 AFURLSessionManager 中的同名代理方法中被调用
 - (void)URLSession:(NSURLSession *)session downloadTask:(NSURLSessionDownloadTask *)downloadTask
       didWriteData:(int64_t)bytesWritten
  totalBytesWritten:(int64_t)totalBytesWritten
 totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite{
-    
+    // 更新下载进度条总下载量
     self.downloadProgress.totalUnitCount = totalBytesExpectedToWrite;
+    // 更新下载进度条已完成下载量
     self.downloadProgress.completedUnitCount = totalBytesWritten;
 }
 
+// session 下载任务恢复
 // 此代理方法在 AFURLSessionManager 中的同名代理方法中被调用
 - (void)URLSession:(NSURLSession *)session downloadTask:(NSURLSessionDownloadTask *)downloadTask
  didResumeAtOffset:(int64_t)fileOffset
 expectedTotalBytes:(int64_t)expectedTotalBytes{
-    
+    // 更新下载进度条总下载量
     self.downloadProgress.totalUnitCount = expectedTotalBytes;
+    // 更新下载进度条已完成下载量
     self.downloadProgress.completedUnitCount = fileOffset;
 }
 
@@ -1252,6 +1258,7 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
     }
 }
 
+// session task 上传数据
 - (void)URLSession:(NSURLSession *)session
               task:(NSURLSessionTask *)task
    didSendBodyData:(int64_t)bytesSent
@@ -1280,6 +1287,7 @@ totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend
     }
 }
 
+// session 任务完成
 - (void)URLSession:(NSURLSession *)session
               task:(NSURLSessionTask *)task
 didCompleteWithError:(NSError *)error
@@ -1301,6 +1309,7 @@ didCompleteWithError:(NSError *)error
 }
 
 #if AF_CAN_INCLUDE_SESSION_TASK_METRICS
+// session 完成 task 指标收集
 - (void)URLSession:(NSURLSession *)session
               task:(NSURLSessionTask *)task
 didFinishCollectingMetrics:(NSURLSessionTaskMetrics *)metrics AF_API_AVAILABLE(ios(10), macosx(10.12), watchos(3), tvos(10))
@@ -1429,6 +1438,7 @@ didFinishDownloadingToURL:(NSURL *)location
     }
 }
 
+// session downloadTask 下载数据中
 - (void)URLSession:(NSURLSession *)session
       downloadTask:(NSURLSessionDownloadTask *)downloadTask
       didWriteData:(int64_t)bytesWritten
@@ -1448,6 +1458,7 @@ totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite
     }
 }
 
+// session 下载任务恢复
 - (void)URLSession:(NSURLSession *)session
       downloadTask:(NSURLSessionDownloadTask *)downloadTask
  didResumeAtOffset:(int64_t)fileOffset
