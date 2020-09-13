@@ -1283,10 +1283,13 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
 totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend
 {
 
+    // 总上传数据量
     int64_t totalUnitCount = totalBytesExpectedToSend;
     if (totalUnitCount == NSURLSessionTransferSizeUnknown) {
+        // 总上传数据量为未知时，从请求头从获取上传数据内容长度
         NSString *contentLength = [task.originalRequest valueForHTTPHeaderField:@"Content-Length"];
         if (contentLength) {
+            // 上传数据内容长度 赋值给 总上传数据量
             totalUnitCount = (int64_t) [contentLength longLongValue];
         }
     }
