@@ -99,9 +99,13 @@ typedef void (^AFURLSessionTaskCompletionHandler)(NSURLResponse *response, id re
 #if AF_CAN_INCLUDE_SESSION_TASK_METRICS
 @property (nonatomic, strong) NSURLSessionTaskMetrics *sessionTaskMetrics AF_API_AVAILABLE(ios(10), macosx(10.12), watchos(3), tvos(10));
 #endif
+// downloadTask完成下载block，用于获取下载文件目标地址
 @property (nonatomic, copy) AFURLSessionDownloadTaskDidFinishDownloadingBlock downloadTaskDidFinishDownloading;
+// 上传进度block
 @property (nonatomic, copy) AFURLSessionTaskProgressBlock uploadProgressBlock;
+// 下载进度block
 @property (nonatomic, copy) AFURLSessionTaskProgressBlock downloadProgressBlock;
+// 完成进度block
 @property (nonatomic, copy) AFURLSessionTaskCompletionHandler completionHandler;
 @end
 
@@ -1043,22 +1047,22 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 #endif
 
 #pragma mark -
-// 设置当 session 请求需要一个新的 bodystream 的block,在 URLSession:task:needNewBodyStream: 中被调用
+// 设置当 task 请求需要一个新的 bodystream 的block,在 URLSession:task:needNewBodyStream: 中被调用
 - (void)setTaskNeedNewBodyStreamBlock:(NSInputStream * (^)(NSURLSession *session, NSURLSessionTask *task))block {
     self.taskNeedNewBodyStream = block;
 }
 
-// 设置当 session 将要重定向block，在 URLSession:willPerformHTTPRedirection:newRequest:completionHandler: 中被调用
+// 设置当 task 将要重定向block，在 URLSession:willPerformHTTPRedirection:newRequest:completionHandler: 中被调用
 - (void)setTaskWillPerformHTTPRedirectionBlock:(NSURLRequest * (^)(NSURLSession *session, NSURLSessionTask *task, NSURLResponse *response, NSURLRequest *request))block {
     self.taskWillPerformHTTPRedirection = block;
 }
 
-// 设置 获取上传进度 的block，在 URLSession:task:didSendBodyData:totalBytesSent:totalBytesExpectedToSend: 中被调用
+// 设置获取上传进度 的block，在 URLSession:task:didSendBodyData:totalBytesSent:totalBytesExpectedToSend: 中被调用
 - (void)setTaskDidSendBodyDataBlock:(void (^)(NSURLSession *session, NSURLSessionTask *task, int64_t bytesSent, int64_t totalBytesSent, int64_t totalBytesExpectedToSend))block {
     self.taskDidSendBodyData = block;
 }
 
-// 设置任务完成block，在 URLSession:task:didCompleteWithError: 中被调用
+// 设置task完成block，在 URLSession:task:didCompleteWithError: 中被调用
 - (void)setTaskDidCompleteBlock:(void (^)(NSURLSession *session, NSURLSessionTask *task, NSError *error))block {
     self.taskDidComplete = block;
 }
@@ -1086,29 +1090,29 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
     self.dataTaskDidReceiveData = block;
 }
 
-//
+// 设置dataTask将要缓存响应数据block,在 URLSession:dataTask:willCacheResponse:completionHandler: 中被调用
 - (void)setDataTaskWillCacheResponseBlock:(NSCachedURLResponse * (^)(NSURLSession *session, NSURLSessionDataTask *dataTask, NSCachedURLResponse *proposedResponse))block {
     self.dataTaskWillCacheResponse = block;
 }
 
 #pragma mark -
-
+// 设置downloadTask完成下载block，用于获取下载文件目标地址，在 URLSession:downloadTask:didFinishDownloadingToURL: 中被调用
 - (void)setDownloadTaskDidFinishDownloadingBlock:(NSURL * (^)(NSURLSession *session, NSURLSessionDownloadTask *downloadTask, NSURL *location))block {
     self.downloadTaskDidFinishDownloading = block;
 }
 
-//
+// 设置downloadTask下载数据block，用于跟踪下载进度，在 URLSession:downloadTask:didWriteData:totalBytesWritten:totalBytesExpectedToWrite: 中被调用
 - (void)setDownloadTaskDidWriteDataBlock:(void (^)(NSURLSession *session, NSURLSessionDownloadTask *downloadTask, int64_t bytesWritten, int64_t totalBytesWritten, int64_t totalBytesExpectedToWrite))block {
     self.downloadTaskDidWriteData = block;
 }
 
-// 设置下载任务恢复block
+// 设置downloadTask恢复block，在 URLSession:downloadTask:didResumeAtOffset:expectedTotalBytes: 中被调用
 - (void)setDownloadTaskDidResumeBlock:(void (^)(NSURLSession *session, NSURLSessionDownloadTask *downloadTask, int64_t fileOffset, int64_t expectedTotalBytes))block {
     self.downloadTaskDidResume = block;
 }
 
 #pragma mark - NSObject
-
+// 复写description方法
 - (NSString *)description {
     return [NSString stringWithFormat:@"<%@: %p, session: %@, operationQueue: %@>", NSStringFromClass([self class]), self, self.session, self.operationQueue];
 }
@@ -1271,7 +1275,7 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
     }
 }
 
-// session task 上传数据
+// task 上传数据
 - (void)URLSession:(NSURLSession *)session
               task:(NSURLSessionTask *)task
    didSendBodyData:(int64_t)bytesSent
@@ -1301,7 +1305,7 @@ totalBytesExpectedToSend:(int64_t)totalBytesExpectedToSend
     }
 }
 
-// session 任务完成
+// 任务完成
 - (void)URLSession:(NSURLSession *)session
               task:(NSURLSessionTask *)task
 didCompleteWithError:(NSError *)error
@@ -1313,17 +1317,18 @@ didCompleteWithError:(NSError *)error
     if (delegate) {
         // 调用 delegate 中的同名代理方法
         [delegate URLSession:session task:task didCompleteWithError:error];
-
+        // 移除 task 的恢复、暂停通知，移除在字典中的缓存的与 taskDelegate 对象的键值对数据
         [self removeDelegateForTask:task];
     }
 
     if (self.taskDidComplete) {
+        // 调用任务完成block
         self.taskDidComplete(session, task, error);
     }
 }
 
 #if AF_CAN_INCLUDE_SESSION_TASK_METRICS
-// session 完成 task 指标收集
+// 完成 task 指标收集
 - (void)URLSession:(NSURLSession *)session
               task:(NSURLSessionTask *)task
 didFinishCollectingMetrics:(NSURLSessionTaskMetrics *)metrics AF_API_AVAILABLE(ios(10), macosx(10.12), watchos(3), tvos(10))
@@ -1345,12 +1350,19 @@ didFinishCollectingMetrics:(NSURLSessionTaskMetrics *)metrics AF_API_AVAILABLE(i
 
 #pragma mark - NSURLSessionDataDelegate
 
+// dataTask 接收到响应，默认情况下是不会接收返回数据,如果需要接收应该主动告诉系统
 - (void)URLSession:(NSURLSession *)session
           dataTask:(NSURLSessionDataTask *)dataTask
 didReceiveResponse:(NSURLResponse *)response
  completionHandler:(void (^)(NSURLSessionResponseDisposition disposition))completionHandler
 {
+    // 响应意向对象，决定dataTask如何继续执行，继续？取消？转变为Download？
     NSURLSessionResponseDisposition disposition = NSURLSessionResponseAllow;
+    
+    // NSURLSessionResponseCancel = 0,                                      /* Cancel the load, this is the same as -[task cancel] */
+    // NSURLSessionResponseAllow = 1,                                       /* Allow the load to continue */
+    // NSURLSessionResponseBecomeDownload = 2,                              /* Turn this request into a download */
+    // NSURLSessionResponseBecomeStream                                     /* Turn this task into a stream task */
 
     if (self.dataTaskDidReceiveResponse) {
         // 执行任务接收到响应block
@@ -1358,6 +1370,7 @@ didReceiveResponse:(NSURLResponse *)response
     }
 
     if (completionHandler) {
+        // 返回对响应意向的对象
         completionHandler(disposition);
     }
 }
@@ -1370,7 +1383,9 @@ didBecomeDownloadTask:(NSURLSessionDownloadTask *)downloadTask
     // 获取 task 对应的 taskDelegate 对象
     AFURLSessionManagerTaskDelegate *delegate = [self delegateForTask:dataTask];
     if (delegate) {
+        // 移除 dataTask 的恢复、暂停通知，移除在字典中的缓存的与 taskDelegate 对象的键值对数据
         [self removeDelegateForTask:dataTask];
+        // 对新的 downloadTask，添加恢复、暂停通知，在字典中添加新的 taskDelegate 与 downloadTask.taskIdentifier 键值对数据
         [self setDelegate:delegate forTask:downloadTask];
     }
 
@@ -1396,14 +1411,17 @@ didBecomeDownloadTask:(NSURLSessionDownloadTask *)downloadTask
     }
 }
 
+// dataTask 将要缓存响应数据
 - (void)URLSession:(NSURLSession *)session
           dataTask:(NSURLSessionDataTask *)dataTask
  willCacheResponse:(NSCachedURLResponse *)proposedResponse
  completionHandler:(void (^)(NSCachedURLResponse *cachedResponse))completionHandler
 {
+    // 一个对请求响应数据的封装对象
     NSCachedURLResponse *cachedResponse = proposedResponse;
 
     if (self.dataTaskWillCacheResponse) {
+        // 调用dataTask将要缓存响应数据block
         cachedResponse = self.dataTaskWillCacheResponse(session, dataTask, proposedResponse);
     }
 
@@ -1425,7 +1443,7 @@ didBecomeDownloadTask:(NSURLSessionDownloadTask *)downloadTask
 
 #pragma mark - NSURLSessionDownloadDelegate
 
-// session 完成下载
+// downloadTask 完成下载
 - (void)URLSession:(NSURLSession *)session
       downloadTask:(NSURLSessionDownloadTask *)downloadTask
 didFinishDownloadingToURL:(NSURL *)location
@@ -1459,7 +1477,7 @@ didFinishDownloadingToURL:(NSURL *)location
     }
 }
 
-// session downloadTask 下载数据中
+// downloadTask 下载数据中
 - (void)URLSession:(NSURLSession *)session
       downloadTask:(NSURLSessionDownloadTask *)downloadTask
       didWriteData:(int64_t)bytesWritten
@@ -1475,11 +1493,12 @@ totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite
     }
 
     if (self.downloadTaskDidWriteData) {
+        // 调用downloadTask下载数据block
         self.downloadTaskDidWriteData(session, downloadTask, bytesWritten, totalBytesWritten, totalBytesExpectedToWrite);
     }
 }
 
-// session 下载任务恢复
+// 下载任务恢复
 - (void)URLSession:(NSURLSession *)session
       downloadTask:(NSURLSessionDownloadTask *)downloadTask
  didResumeAtOffset:(int64_t)fileOffset
@@ -1494,6 +1513,7 @@ expectedTotalBytes:(int64_t)expectedTotalBytes
     }
 
     if (self.downloadTaskDidResume) {
+        // 调用downloadTask恢复block
         self.downloadTaskDidResume(session, downloadTask, fileOffset, expectedTotalBytes);
     }
 }
