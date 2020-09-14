@@ -102,8 +102,11 @@ _out:
     return allowedPublicKey;
 }
 
+// 判断serverTrust是否可以被信任
 static BOOL AFServerTrustIsValid(SecTrustRef serverTrust) {
+    // 默认无效
     BOOL isValid = NO;
+    // 枚举类型, 用来存储结果
     SecTrustResultType result;
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
@@ -307,6 +310,7 @@ static NSArray * AFPublicKeyTrustChainForServerTrust(SecTrustRef serverTrust) {
     SecTrustSetPolicies(serverTrust, (__bridge CFArrayRef)policies);
 
     if (self.SSLPinningMode == AFSSLPinningModeNone) {
+        // 如果设置的mode为AFSSLPinningModeNone,则self.allowInvalidCertificates = yes(允许失效的cer) 或 serverTrust
         return self.allowInvalidCertificates || AFServerTrustIsValid(serverTrust);
     } else if (!self.allowInvalidCertificates && !AFServerTrustIsValid(serverTrust)) {
         return NO;
