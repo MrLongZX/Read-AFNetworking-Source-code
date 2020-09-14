@@ -22,6 +22,7 @@
 #import "AFURLSessionManager.h"
 #import <objc/runtime.h>
 
+// 创建队列
 static dispatch_queue_t url_session_manager_processing_queue() {
     static dispatch_queue_t af_url_session_manager_processing_queue;
     static dispatch_once_t onceToken;
@@ -32,6 +33,7 @@ static dispatch_queue_t url_session_manager_processing_queue() {
     return af_url_session_manager_processing_queue;
 }
 
+// 创建group
 static dispatch_group_t url_session_manager_completion_group() {
     static dispatch_group_t af_url_session_manager_completion_group;
     static dispatch_once_t onceToken;
@@ -420,6 +422,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 
 @end
 
+// 本类实现对 NSURLSessionTask 及其父类 的 resume 和 suspend 方法进行方法交换的功能
 @implementation _AFURLSessionTaskSwizzling
 
 + (void)load {
@@ -1047,6 +1050,8 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 #endif
 
 #pragma mark -
+// 下面12个设置block的方法,每个block与一个代理方法对应,通过这些block使开发者知道执行了那个代理方法与代理方法的参数值
+
 // 设置当 task 请求需要一个新的 bodystream 的block,在 URLSession:task:needNewBodyStream: 中被调用
 - (void)setTaskNeedNewBodyStreamBlock:(NSInputStream * (^)(NSURLSession *session, NSURLSessionTask *task))block {
     self.taskNeedNewBodyStream = block;
@@ -1117,6 +1122,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
     return [NSString stringWithFormat:@"<%@: %p, session: %@, operationQueue: %@>", NSStringFromClass([self class]), self, self.session, self.operationQueue];
 }
 
+// 复写respondsToSelector方法
 - (BOOL)respondsToSelector:(SEL)selector {
     if (selector == @selector(URLSession:didReceiveChallenge:completionHandler:)) {
         return self.sessionDidReceiveAuthenticationChallenge != nil;
@@ -1143,7 +1149,7 @@ static NSString * const AFNSURLSessionTaskDidSuspendNotification = @"com.alamofi
 didBecomeInvalidWithError:(NSError *)error
 {
     if (self.sessionDidBecomeInvalid) {
-        // 如果设置了 sessionDidBecomeInvalid,则调用
+        // 调用session失效block
         self.sessionDidBecomeInvalid(session, error);
     }
 
@@ -1151,6 +1157,7 @@ didBecomeInvalidWithError:(NSError *)error
     [[NSNotificationCenter defaultCenter] postNotificationName:AFURLSessionDidInvalidateNotification object:session];
 }
 
+// session 接收
 - (void)URLSession:(NSURLSession *)session
 didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
  completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition disposition, NSURLCredential *credential))completionHandler
@@ -1166,13 +1173,14 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
 }
 
 #pragma mark - NSURLSessionTaskDelegate
-
+// 将要重定向
 - (void)URLSession:(NSURLSession *)session
               task:(NSURLSessionTask *)task
 willPerformHTTPRedirection:(NSHTTPURLResponse *)response
         newRequest:(NSURLRequest *)request
  completionHandler:(void (^)(NSURLRequest *))completionHandler
 {
+    // 重定向请求
     NSURLRequest *redirectRequest = request;
 
     if (self.taskWillPerformHTTPRedirection) {
@@ -1181,6 +1189,7 @@ willPerformHTTPRedirection:(NSHTTPURLResponse *)response
     }
 
     if (completionHandler) {
+        // 返回重定向请求
         completionHandler(redirectRequest);
     }
 }
@@ -1257,6 +1266,7 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
     return [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorServerCertificateUntrusted userInfo:userInfo];
 }
 
+// task是通过uploadTaskWithStreamedRequest:创建,需要新的数据流主体
 - (void)URLSession:(NSURLSession *)session
               task:(NSURLSessionTask *)task
  needNewBodyStream:(void (^)(NSInputStream *bodyStream))completionHandler
@@ -1267,10 +1277,12 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
         // 执行任务需要新 BodyStream 的 block，获取输入流
         inputStream = self.taskNeedNewBodyStream(session, task);
     } else if (task.originalRequest.HTTPBodyStream && [task.originalRequest.HTTPBodyStream conformsToProtocol:@protocol(NSCopying)]) {
+        // 获取请求中的BodyStream
         inputStream = [task.originalRequest.HTTPBodyStream copy];
     }
 
     if (completionHandler) {
+        // 返回新的数据流
         completionHandler(inputStream);
     }
 }
@@ -1424,11 +1436,12 @@ didBecomeDownloadTask:(NSURLSessionDownloadTask *)downloadTask
     NSCachedURLResponse *cachedResponse = proposedResponse;
 
     if (self.dataTaskWillCacheResponse) {
-        // 调用dataTask将要缓存响应数据block
+        // 调用dataTask将要缓存响应数据block,在此可以通过block返回nil,实现不缓存数据
         cachedResponse = self.dataTaskWillCacheResponse(session, dataTask, proposedResponse);
     }
 
     if (completionHandler) {
+        // 返回需要缓存的数据
         completionHandler(cachedResponse);
     }
 }

@@ -23,8 +23,11 @@
 #import <Security/Security.h>
 
 typedef NS_ENUM(NSUInteger, AFSSLPinningMode) {
+    // 默认的认证方式，只会在系统的信任的证书列表中对服务端返回的证书进行验证
     AFSSLPinningModeNone,
+    // 对客户端预先保存的服务端返回的证书中的公钥进行验证
     AFSSLPinningModePublicKey,
+    // 对客户端预先保存的服务端返回的证书进行验证
     AFSSLPinningModeCertificate,
 };
 
