@@ -303,6 +303,7 @@ static NSArray * AFPublicKeyTrustChainForServerTrust(SecTrustRef serverTrust) {
         [policies addObject:(__bridge_transfer id)SecPolicyCreateBasicX509()];
     }
 
+    // 为SecTrustRef serverTrust设置需要验证的策略policies
     SecTrustSetPolicies(serverTrust, (__bridge CFArrayRef)policies);
 
     if (self.SSLPinningMode == AFSSLPinningModeNone) {
