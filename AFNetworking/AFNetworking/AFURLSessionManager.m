@@ -1157,14 +1157,24 @@ didBecomeInvalidWithError:(NSError *)error
     [[NSNotificationCenter defaultCenter] postNotificationName:AFURLSessionDidInvalidateNotification object:session];
 }
 
-// session 接收
+// session 接受认证挑战
 - (void)URLSession:(NSURLSession *)session
 didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
  completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition disposition, NSURLCredential *credential))completionHandler
 {
+    // 使用断言，self.sessionDidReceiveAuthenticationChallenge 不能为nil
     NSAssert(self.sessionDidReceiveAuthenticationChallenge != nil, @"`respondsToSelector:` implementation forces `URLSession:didReceiveChallenge:completionHandler:` to be called only if `self.sessionDidReceiveAuthenticationChallenge` is not nil");
 
     NSURLCredential *credential = nil;
+        /* Use the specified credential, which may be nil */
+        NSURLSessionAuthChallengeUseCredential = 0,
+        /* Default handling for the challenge - as if this delegate were not implemented; the credential parameter is ignored. */
+        NSURLSessionAuthChallengePerformDefaultHandling = 1,
+        /* The entire request will be canceled; the credential parameter is ignored. */
+        NSURLSessionAuthChallengeCancelAuthenticationChallenge = 2,
+        /* This challenge is rejected and the next authentication protection space should be tried; the credential parameter is ignored. */
+        NSURLSessionAuthChallengeRejectProtectionSpace = 3,
+    
     NSURLSessionAuthChallengeDisposition disposition = self.sessionDidReceiveAuthenticationChallenge(session, challenge, &credential);
 
     if (completionHandler) {
@@ -1194,6 +1204,7 @@ willPerformHTTPRedirection:(NSHTTPURLResponse *)response
     }
 }
 
+// task接受认证挑战
 - (void)URLSession:(NSURLSession *)session
               task:(NSURLSessionTask *)task
 didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge

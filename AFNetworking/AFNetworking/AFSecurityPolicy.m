@@ -103,6 +103,7 @@ _out:
 }
 
 // 判断serverTrust是否可以被信任
+// 每一个 SecTrustRef 的对象都是包含多个 SecCertificateRef 和 SecPolicyRef。其中 SecCertificateRef 可以使用 DER文件 进行表示，并且其中存储着公钥信息
 static BOOL AFServerTrustIsValid(SecTrustRef serverTrust) {
     // 默认无效
     BOOL isValid = NO;
@@ -124,14 +125,14 @@ _out:
     return isValid;
 }
 
-// 取出所有服务器返回的证书
+// 取出serverTrust中的所有证书
 static NSArray * AFCertificateTrustChainForServerTrust(SecTrustRef serverTrust) {
     // 获取SecTrustRef serverTrust证书评估链中cer文件的数量
     CFIndex certificateCount = SecTrustGetCertificateCount(serverTrust);
     NSMutableArray *trustChain = [NSMutableArray arrayWithCapacity:(NSUInteger)certificateCount];
 
     for (CFIndex i = 0; i < certificateCount; i++) {
-        // 获取 SecTrustRef 中i位置的cer文件
+        // 获取 SecTrustRef serverTrust 中第i位置的cer文件
         SecCertificateRef certificate = SecTrustGetCertificateAtIndex(serverTrust, i);
         // 保存cer文件到数组
         [trustChain addObject:(__bridge_transfer NSData *)SecCertificateCopyData(certificate)];
@@ -141,7 +142,7 @@ static NSArray * AFCertificateTrustChainForServerTrust(SecTrustRef serverTrust) 
     return [NSArray arrayWithArray:trustChain];
 }
 
-// 取出服务器返回的所有证书中的公钥
+// 获取serverTrust中所有证书对应的公钥
 static NSArray * AFPublicKeyTrustChainForServerTrust(SecTrustRef serverTrust) {
     // 创建一个默认的符合 X509 标准的 SecPolicyRef
     SecPolicyRef policy = SecPolicyCreateBasicX509();
@@ -149,7 +150,7 @@ static NSArray * AFPublicKeyTrustChainForServerTrust(SecTrustRef serverTrust) {
     CFIndex certificateCount = SecTrustGetCertificateCount(serverTrust);
     NSMutableArray *trustChain = [NSMutableArray arrayWithCapacity:(NSUInteger)certificateCount];
     for (CFIndex i = 0; i < certificateCount; i++) {
-        // 获取 SecTrustRef 中i位置的cer文件
+        // 获取 SecTrustRef serverTrust 中第i位置的cer文件
         SecCertificateRef certificate = SecTrustGetCertificateAtIndex(serverTrust, i);
 
         // 创建一个包含 certificate 的数组
@@ -284,6 +285,7 @@ static NSArray * AFPublicKeyTrustChainForServerTrust(SecTrustRef serverTrust) {
                   forDomain:(NSString *)domain
 {
     // 不能隐式地信任自己签发的证书
+    // 没有提供证书或者不验证证书，并且还设置 allowInvalidCertificates 为真，满足上面的所有条件，说明这次的验证是不安全的，会直接返回 NO
     if (domain && self.allowInvalidCertificates && self.validatesDomainName && (self.SSLPinningMode == AFSSLPinningModeNone || [self.pinnedCertificates count] == 0)) {
         // https://developer.apple.com/library/mac/documentation/NetworkingInternet/Conceptual/NetworkingTopics/Articles/OverridingSSLChainValidationCorrectly.html
         //  According to the docs, you should only trust your provided certs for evaluation.
@@ -299,7 +301,7 @@ static NSArray * AFPublicKeyTrustChainForServerTrust(SecTrustRef serverTrust) {
 
     NSMutableArray *policies = [NSMutableArray array];
     if (self.validatesDomainName) {
-        // 如果需要验证域名,数组添加一个以域名为参数创建的用于评估SSL证书链的策略对象
+        // 如果需要验证域名,数组添加一个以域名为参数创建的用于SSL评估证书链的策略对象
         [policies addObject:(__bridge_transfer id)SecPolicyCreateSSL(true, (__bridge CFStringRef)domain)];
     } else {
         // 数组添加默认的X509策略对象
@@ -310,29 +312,39 @@ static NSArray * AFPublicKeyTrustChainForServerTrust(SecTrustRef serverTrust) {
     SecTrustSetPolicies(serverTrust, (__bridge CFArrayRef)policies);
 
     if (self.SSLPinningMode == AFSSLPinningModeNone) {
-        // 如果设置的mode为AFSSLPinningModeNone,则self.allowInvalidCertificates = yes(允许失效的cer) 或 serverTrust
+        // 如果只根据系统信任列表中的证书进行验证,即mode为AFSSLPinningModeNone, self.allowInvalidCertificates = YES(允许失效的cer) 或 serverTrust可以被信任 是 则返回YES
         return self.allowInvalidCertificates || AFServerTrustIsValid(serverTrust);
     } else if (!self.allowInvalidCertificates && !AFServerTrustIsValid(serverTrust)) {
+        // self.SSLPinningMode 为 AFSSLPinningModePublicKey、AFSSLPinningModeCertificate模式时,如果 不允许失效的cer 并且 serverTrust不被信任,则返回NO
         return NO;
     }
 
     switch (self.SSLPinningMode) {
         case AFSSLPinningModeCertificate: {
+            // 验证cer文件
             NSMutableArray *pinnedCertificates = [NSMutableArray array];
+            // 遍历cer文件数据集合
             for (NSData *certificateData in self.pinnedCertificates) {
+                // 数组 添加 通过一个cer文件数据创建的一个SecCertificateRef对象
                 [pinnedCertificates addObject:(__bridge_transfer id)SecCertificateCreateWithData(NULL, (__bridge CFDataRef)certificateData)];
             }
+            // 设置serverTrust的锚点证书来验证serverTrust
+            // 由于没有继续调用SecTrustSetAnchorCertificatesOnly() 函数,所以只会信任pinnedCertificates中的证书签发的证书
             SecTrustSetAnchorCertificates(serverTrust, (__bridge CFArrayRef)pinnedCertificates);
 
             if (!AFServerTrustIsValid(serverTrust)) {
+                // serverTrust不被信任,返回NO
                 return NO;
             }
 
             // obtain the chain after being validated, which *should* contain the pinned certificate in the last position (if it's the Root CA)
+            // 取出serverTrust中的证书信任链
             NSArray *serverCertificates = AFCertificateTrustChainForServerTrust(serverTrust);
             
+            // 倒序遍历
             for (NSData *trustChainCertificate in [serverCertificates reverseObjectEnumerator]) {
                 if ([self.pinnedCertificates containsObject:trustChainCertificate]) {
+                    // 开发者工程本地cer文件数据集合包含证书信任链中的某个证书数据,则返回YES
                     return YES;
                 }
             }
@@ -340,16 +352,20 @@ static NSArray * AFPublicKeyTrustChainForServerTrust(SecTrustRef serverTrust) {
             return NO;
         }
         case AFSSLPinningModePublicKey: {
+            // 验证公钥
             NSUInteger trustedPublicKeyCount = 0;
+            // 取出serverTrust中所有证书对应的公钥
             NSArray *publicKeys = AFPublicKeyTrustChainForServerTrust(serverTrust);
 
             for (id trustChainPublicKey in publicKeys) {
                 for (id pinnedPublicKey in self.pinnedPublicKeys) {
+                    // serverTrust中所有证书对应的公钥 与 开发者工程本地cer文件对应公钥 有一样的,则计数加1
                     if (AFSecKeyIsEqualToKey((__bridge SecKeyRef)trustChainPublicKey, (__bridge SecKeyRef)pinnedPublicKey)) {
                         trustedPublicKeyCount += 1;
                     }
                 }
             }
+            // 公钥一致的数量大于0,则为YES
             return trustedPublicKeyCount > 0;
         }
             
