@@ -1169,12 +1169,10 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
 
     // 使用指定证书
     // NSURLSessionAuthChallengeUseCredential = 0,
-    /* Default handling for the challenge - as if this delegate were not implemented; the credential parameter is ignored. */
     // 默认的处理方式,忽略证书
     // NSURLSessionAuthChallengePerformDefaultHandling = 1,
     // 取消本次请求,忽略书证
     // NSURLSessionAuthChallengeCancelAuthenticationChallenge = 2,
-    /* This challenge is rejected and the next authentication protection space should be tried; the credential parameter is ignored. */
     // 拒绝当前认证挑战, 下一次再询问
     // NSURLSessionAuthChallengeRejectProtectionSpace = 3,
     
