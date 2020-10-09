@@ -1176,6 +1176,7 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
     // 拒绝当前认证挑战, 下一次再询问
     // NSURLSessionAuthChallengeRejectProtectionSpace = 3,
     
+    // 获得挑战意向 disposition 与 证书 credential
     NSURLSessionAuthChallengeDisposition disposition = self.sessionDidReceiveAuthenticationChallenge(session, challenge, &credential);
 
     if (completionHandler) {
@@ -1212,10 +1213,12 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
  completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition disposition, NSURLCredential *credential))completionHandler
 {
     BOOL evaluateServerTrust = NO;
+    // 会话验证挑战意向为默认:忽略证书
     NSURLSessionAuthChallengeDisposition disposition = NSURLSessionAuthChallengePerformDefaultHandling;
     NSURLCredential *credential = nil;
 
     if (self.authenticationChallengeHandler) {
+        // 存在 认证挑战处理block
         id result = self.authenticationChallengeHandler(session, task, challenge, completionHandler);
         if (result == nil) {
             return;
@@ -1233,10 +1236,12 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
             @throw [NSException exceptionWithName:@"Invalid Return Value" reason:@"The return value from the authentication challenge handler must be nil, an NSError, an NSURLCredential or an NSNumber." userInfo:nil];
         }
     } else {
+        // 挑战保护空间的认证方法 是否等于 服务器信任
         evaluateServerTrust = [challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust];
     }
 
     if (evaluateServerTrust) {
+        
         if ([self.securityPolicy evaluateServerTrust:challenge.protectionSpace.serverTrust forDomain:challenge.protectionSpace.host]) {
             disposition = NSURLSessionAuthChallengeUseCredential;
             credential = [NSURLCredential credentialForTrust:challenge.protectionSpace.serverTrust];
