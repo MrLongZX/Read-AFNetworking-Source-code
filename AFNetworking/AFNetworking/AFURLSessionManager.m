@@ -1217,20 +1217,31 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
     NSURLSessionAuthChallengeDisposition disposition = NSURLSessionAuthChallengePerformDefaultHandling;
     NSURLCredential *credential = nil;
 
+    // self.authenticationChallengeHandler 是通过.h文件362行的set方法设置的
     if (self.authenticationChallengeHandler) {
-        // 存在 认证挑战处理block
+        // 存在 认证挑战处理block 则执行 获取返回结果
         id result = self.authenticationChallengeHandler(session, task, challenge, completionHandler);
         if (result == nil) {
+            // result 为 nil, 则return
             return;
         } else if ([result isKindOfClass:NSError.class]) {
+            // result 为 NSError 类型对象，则对 task 通过关联对象方式，关联上 result 对象
+            // 此关联的 result 错误类型对象，在 AFURLSessionManagerTaskDelegate 的 - (void)URLSession:task:didCompleteWithError:代理方法中，被获取并使用
             objc_setAssociatedObject(task, AuthenticationChallengeErrorKey, result, OBJC_ASSOCIATION_RETAIN);
+            // 设置会话验证挑战意向为：取消本次请求
             disposition = NSURLSessionAuthChallengeCancelAuthenticationChallenge;
         } else if ([result isKindOfClass:NSURLCredential.class]) {
+            // result 为 NSURLCredential 类型对象（验证凭据 或叫 认证证书）
+            // 则将 result 赋值给 credential
             credential = result;
+            // 设置会话验证挑战意向为：使用指定证书
             disposition = NSURLSessionAuthChallengeUseCredential;
         } else if ([result isKindOfClass:NSNumber.class]) {
+            // result 为 NSNumber 类型对象
             disposition = [result integerValue];
+            // 使用断言，进行判断
             NSAssert(disposition == NSURLSessionAuthChallengePerformDefaultHandling || disposition == NSURLSessionAuthChallengeCancelAuthenticationChallenge || disposition == NSURLSessionAuthChallengeRejectProtectionSpace, @"");
+            // 判断，设置 evaluateServerTrust 的值
             evaluateServerTrust = disposition == NSURLSessionAuthChallengePerformDefaultHandling && [challenge.protectionSpace.authenticationMethod isEqualToString:NSURLAuthenticationMethodServerTrust];
         } else {
             @throw [NSException exceptionWithName:@"Invalid Return Value" reason:@"The return value from the authentication challenge handler must be nil, an NSError, an NSURLCredential or an NSNumber." userInfo:nil];
@@ -1241,14 +1252,21 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
     }
 
     if (evaluateServerTrust) {
-        
+        // 挑战保护空间的认证方法是服务器信任的
         if ([self.securityPolicy evaluateServerTrust:challenge.protectionSpace.serverTrust forDomain:challenge.protectionSpace.host]) {
+            // 在指定的安全策略下，服务器信任被认可
+            // 设置会话验证挑战意向为：使用指定证书
             disposition = NSURLSessionAuthChallengeUseCredential;
+            // 设置认证证书
             credential = [NSURLCredential credentialForTrust:challenge.protectionSpace.serverTrust];
         } else {
+            // 在指定的安全策略下，服务器信任不被认可
+            //
+            // 此关联的 result 错误类型对象，在 AFURLSessionManagerTaskDelegate 的 - (void)URLSession:task:didCompleteWithError:代理方法中，被获取并使用
             objc_setAssociatedObject(task, AuthenticationChallengeErrorKey,
                                      [self serverTrustErrorForServerTrust:challenge.protectionSpace.serverTrust url:task.currentRequest.URL],
                                      OBJC_ASSOCIATION_RETAIN);
+            // 设置会话验证挑战意向为：取消本次请求
             disposition = NSURLSessionAuthChallengeCancelAuthenticationChallenge;
         }
     }
