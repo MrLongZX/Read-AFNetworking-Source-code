@@ -1167,13 +1167,13 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
 
     NSURLCredential *credential = nil;
 
-    // 使用指定证书
+    // 使用指定凭据（credential）
     // NSURLSessionAuthChallengeUseCredential = 0,
-    // 默认的处理方式,忽略证书
+    // 默认的处理方式,如果有提供凭据也会被忽略，如果没有实现 URLSessionDelegate 处理认证的方法则会使用这种方式
     // NSURLSessionAuthChallengePerformDefaultHandling = 1,
-    // 取消本次请求,忽略书证
+    // 取消本次认证,如果有提供凭据也会被忽略，会取消当前的 URLSessionTask 请求
     // NSURLSessionAuthChallengeCancelAuthenticationChallenge = 2,
-    // 拒绝当前认证挑战, 下一次再询问
+    // 拒绝认证挑战，并且进行下一个认证挑战，如果有提供凭据也会被忽略；大多数情况不会使用这种方式，无法为某个认证提供凭据，则通常应返回 performDefaultHandling
     // NSURLSessionAuthChallengeRejectProtectionSpace = 3,
     
     // 获得挑战意向 disposition 与 证书 credential
@@ -1205,7 +1205,8 @@ willPerformHTTPRedirection:(NSHTTPURLResponse *)response
         completionHandler(redirectRequest);
     }
 }
-
+// challenge 学习链接:
+// iOS Authentication Challenge : https://juejin.im/post/6844904056767381518
 // task接受认证挑战
 - (void)URLSession:(NSURLSession *)session
               task:(NSURLSessionTask *)task
@@ -1274,6 +1275,49 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
     if (completionHandler) {
         completionHandler(disposition, credential);
     }
+    // 补充:
+    /*
+     //session 范围内的认证质询:
+     // 客户端证书认证
+     // NSURLAuthenticationMethodClientCertificate
+
+     // 协商使用 Kerberos 还是 NTLM 认证
+     // NSURLAuthenticationMethodNegotiate
+
+     // NTLM 认证
+     // NSURLAuthenticationMethodNTLM
+
+     // 服务器信任认证（证书验证）
+     // NSURLAuthenticationMethodServerTrust
+
+     //  任务特定的认证质询:
+     // 使用某种协议的默认认证方法
+     // NSURLAuthenticationMethodDefault
+
+     // HTML Form 认证，使用 URLSession 发送请求时不会发出此类型认证质询
+     // NSURLAuthenticationMethodHTMLForm
+
+     // HTTP Basic 认证
+     // NSURLAuthenticationMethodHTTPBasic
+
+     // HTTP Digest 认证
+     // NSURLAuthenticationMethodHTTPDigest
+     
+     NSURLCredential对象初始化方法,分别用于不同类型的认证挑战类型:
+     // 用于服务器信任认证挑战(认证质询)，当 challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust 时使用
+     // 从 challenge.protectionSpace.serverTrust 中获取 SecTrust 实例
+     // 使用该方法初始化 URLCredential 实例之前，需要对 SecTrust 实例进行评估
+     + (NSURLCredential *)credentialForTrust:(SecTrustRef)trust;
+     
+     // 用于客户端证书认证质询，当 challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodClientCertificate 时使用
+     // identity: 私钥和和证书的组合
+     // certArray: 大多数情况下传 nil
+     // persistence: 该参数会被忽略，传 .forSession 会比较合适
+     + (NSURLCredential *)credentialWithIdentity:(SecIdentityRef)identity certificates:(nullable NSArray *)certArray persistence:(NSURLCredentialPersistence)persistence;
+     
+     // 使用给定的持久性设置、用户名和密码创建 URLCredential 实例
+     + (NSURLCredential *)credentialWithUser:(NSString *)user password:(NSString *)password persistence:(NSURLCredentialPersistence)persistence;
+     */
 }
 
 - (nonnull NSError *)serverTrustErrorForServerTrust:(nullable SecTrustRef)serverTrust url:(nullable NSURL *)url

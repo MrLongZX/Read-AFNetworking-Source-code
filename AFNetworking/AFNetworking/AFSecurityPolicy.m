@@ -312,7 +312,7 @@ static NSArray * AFPublicKeyTrustChainForServerTrust(SecTrustRef serverTrust) {
     SecTrustSetPolicies(serverTrust, (__bridge CFArrayRef)policies);
 
     if (self.SSLPinningMode == AFSSLPinningModeNone) {
-        // 如果只根据系统信任列表中的证书进行验证,即mode为AFSSLPinningModeNone, self.allowInvalidCertificates = YES(允许失效的cer) 或 serverTrust可以被信任 是 则返回YES
+        // 如果只根据系统信任列表中的证书进行验证,即mode为AFSSLPinningModeNone, self.allowInvalidCertificates = YES(允许失效的cer,即允许自建证书) 或 serverTrust可以被信任 是 则返回YES
         return self.allowInvalidCertificates || AFServerTrustIsValid(serverTrust);
     } else if (!self.allowInvalidCertificates && !AFServerTrustIsValid(serverTrust)) {
         // self.SSLPinningMode 为 AFSSLPinningModePublicKey、AFSSLPinningModeCertificate模式时,如果 不允许失效的cer 并且 serverTrust不被信任,则返回NO
