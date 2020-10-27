@@ -142,7 +142,7 @@ static NSArray * AFCertificateTrustChainForServerTrust(SecTrustRef serverTrust) 
     return [NSArray arrayWithArray:trustChain];
 }
 
-// 获取serverTrust中所有证书对应的公钥
+// 对 serverTrust 里面证书链的证书逐个进行评估，并且返回信任评估通过的证书对应的公钥数组
 static NSArray * AFPublicKeyTrustChainForServerTrust(SecTrustRef serverTrust) {
     // 创建一个默认的符合 X509 标准的 SecPolicyRef
     SecPolicyRef policy = SecPolicyCreateBasicX509();
@@ -169,7 +169,7 @@ static NSArray * AFPublicKeyTrustChainForServerTrust(SecTrustRef serverTrust) {
         // __Require_noErr_Quiet():如果SecTrustEvaluate()函数返回值存在错误,将跳到下面_out处继续执行
         __Require_noErr_Quiet(SecTrustEvaluate(trust, &result), _out);
 #pragma clang diagnostic pop
-        // 从SecTrustRef trust中获取公钥,并添加到数组
+        // 如果信任评估通过, 则从SecTrustRef trust中获取公钥,并添加到数组
         [trustChain addObject:(__bridge_transfer id)SecTrustCopyPublicKey(trust)];
 
     _out:
@@ -284,8 +284,7 @@ static NSArray * AFPublicKeyTrustChainForServerTrust(SecTrustRef serverTrust) {
 - (BOOL)evaluateServerTrust:(SecTrustRef)serverTrust
                   forDomain:(NSString *)domain
 {
-    // 不能隐式地信任自己签发的证书
-    // 没有提供证书或者不验证证书，并且还设置 allowInvalidCertificates 为真，满足上面的所有条件，说明这次的验证是不安全的，会直接返回 NO
+    // 如果需要验证 DomainName，又允许自签名的证书，可是又没有使用 SSL Pinning 或者没有提供证书，这样就会矛盾，所以直接返回 NO
     if (domain && self.allowInvalidCertificates && self.validatesDomainName && (self.SSLPinningMode == AFSSLPinningModeNone || [self.pinnedCertificates count] == 0)) {
         // https://developer.apple.com/library/mac/documentation/NetworkingInternet/Conceptual/NetworkingTopics/Articles/OverridingSSLChainValidationCorrectly.html
         //  According to the docs, you should only trust your provided certs for evaluation.
@@ -312,7 +311,7 @@ static NSArray * AFPublicKeyTrustChainForServerTrust(SecTrustRef serverTrust) {
     SecTrustSetPolicies(serverTrust, (__bridge CFArrayRef)policies);
 
     if (self.SSLPinningMode == AFSSLPinningModeNone) {
-        // 如果只根据系统信任列表中的证书进行验证,即mode为AFSSLPinningModeNone, self.allowInvalidCertificates = YES(允许失效的cer,即允许自建证书) 或 serverTrust可以被信任 是 则返回YES
+        // 在没有使用 SSLPinning 的情况下，如果 allowInvalidCertificates 为 YES，表示不对证书进行评估，可以直接通过，否则需要对证书进行评估
         return self.allowInvalidCertificates || AFServerTrustIsValid(serverTrust);
     } else if (!self.allowInvalidCertificates && !AFServerTrustIsValid(serverTrust)) {
         // self.SSLPinningMode 为 AFSSLPinningModePublicKey、AFSSLPinningModeCertificate模式时,如果 不允许失效的cer 并且 serverTrust不被信任,则返回NO
@@ -354,7 +353,7 @@ static NSArray * AFPublicKeyTrustChainForServerTrust(SecTrustRef serverTrust) {
         case AFSSLPinningModePublicKey: {
             // 验证公钥
             NSUInteger trustedPublicKeyCount = 0;
-            // 取出serverTrust中所有证书对应的公钥
+            // 对 serverTrust 里面证书链的证书逐个进行信任评估，并且返回信任评估通过的证书对应的公钥数组
             NSArray *publicKeys = AFPublicKeyTrustChainForServerTrust(serverTrust);
 
             for (id trustChainPublicKey in publicKeys) {
