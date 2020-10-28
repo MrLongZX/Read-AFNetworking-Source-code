@@ -60,6 +60,7 @@ FOUNDATION_EXPORT NSString * AFQueryStringFromParameters(NSDictionary *parameter
 
  For example, a JSON request serializer may set the HTTP body of the request to a JSON representation, and set the `Content-Type` HTTP header field value to `application/json`.
  */
+// 定义请求序列化协议,并默认遵循其他三个协议
 @protocol AFURLRequestSerialization <NSObject, NSSecureCoding, NSCopying>
 
 /**
@@ -93,11 +94,13 @@ typedef NS_ENUM(NSUInteger, AFHTTPRequestQueryStringSerializationStyle) {
 
  Any request or response serializer dealing with HTTP is encouraged to subclass `AFHTTPRequestSerializer` in order to ensure consistent default behavior.
  */
+// 声明AFHTTPRequestSerializer类, 遵循 AFURLRequestSerialization 协议
 @interface AFHTTPRequestSerializer : NSObject <AFURLRequestSerialization>
 
 /**
  The string encoding used to serialize parameters. `NSUTF8StringEncoding` by default.
  */
+// 字符串编码方式
 @property (nonatomic, assign) NSStringEncoding stringEncoding;
 
 /**
@@ -105,6 +108,7 @@ typedef NS_ENUM(NSUInteger, AFHTTPRequestQueryStringSerializationStyle) {
 
  @see NSMutableURLRequest -setAllowsCellularAccess:
  */
+// 是否允许使用设备蜂窝数据
 @property (nonatomic, assign) BOOL allowsCellularAccess;
 
 /**
@@ -112,6 +116,7 @@ typedef NS_ENUM(NSUInteger, AFHTTPRequestQueryStringSerializationStyle) {
 
  @see NSMutableURLRequest -setCachePolicy:
  */
+// 缓存策略
 @property (nonatomic, assign) NSURLRequestCachePolicy cachePolicy;
 
 /**
@@ -119,6 +124,7 @@ typedef NS_ENUM(NSUInteger, AFHTTPRequestQueryStringSerializationStyle) {
 
  @see NSMutableURLRequest -setHTTPShouldHandleCookies:
  */
+// 是否用cookie来处理创建的请求
 @property (nonatomic, assign) BOOL HTTPShouldHandleCookies;
 
 /**
@@ -126,6 +132,7 @@ typedef NS_ENUM(NSUInteger, AFHTTPRequestQueryStringSerializationStyle) {
 
  @see NSMutableURLRequest -setHTTPShouldUsePipelining:
  */
+// 创建的请求在收到上个传输（transmission）响应之前是否继续发送数据。默认为NO(即等待上次传输完成后再请求)
 @property (nonatomic, assign) BOOL HTTPShouldUsePipelining;
 
 /**
@@ -133,6 +140,8 @@ typedef NS_ENUM(NSUInteger, AFHTTPRequestQueryStringSerializationStyle) {
 
  @see NSMutableURLRequest -setNetworkServiceType:
  */
+// 请求的网络服务类型。
+// 这个服务类型向整个网络传输层次提供了一个关于该请求目的的提示。
 @property (nonatomic, assign) NSURLRequestNetworkServiceType networkServiceType;
 
 /**
@@ -140,6 +149,7 @@ typedef NS_ENUM(NSUInteger, AFHTTPRequestQueryStringSerializationStyle) {
 
  @see NSMutableURLRequest -setTimeoutInterval:
  */
+// 请求的超时间隔，单位秒。默认为60秒
 @property (nonatomic, assign) NSTimeInterval timeoutInterval;
 
 ///---------------------------------------
@@ -154,6 +164,13 @@ typedef NS_ENUM(NSUInteger, AFHTTPRequestQueryStringSerializationStyle) {
 
  @discussion To add or remove default request headers, use `setValue:forHTTPHeaderField:`.
  */
+/**
+  序列请求的默认请求头。
+  默认值包括:
+  'Accept-Language’ 内容为'NSLocale +preferredLanguages’ 方法获取的语言
+  'User-Agent’ 内容为各种bundle的标志系统信息
+  可以使用'setValue:forHTTPHeaderField:’方法添加或删除请求头
+*/
 @property (readonly, nonatomic, strong) NSDictionary <NSString *, NSString *> *HTTPRequestHeaders;
 
 /**
@@ -185,12 +202,14 @@ forHTTPHeaderField:(NSString *)field;
  @param username The HTTP basic auth username
  @param password The HTTP basic auth password
  */
+// 设置授权 http 头数据
 - (void)setAuthorizationHeaderFieldWithUsername:(NSString *)username
                                        password:(NSString *)password;
 
 /**
  Clears any existing value for the "Authorization" HTTP header.
  */
+// 请求授权头数据
 - (void)clearAuthorizationHeader;
 
 ///-------------------------------------------------------
@@ -200,6 +219,7 @@ forHTTPHeaderField:(NSString *)field;
 /**
  HTTP methods for which serialized requests will encode parameters as a query string. `GET`, `HEAD`, and `DELETE` by default.
  */
+// 哪些HTTP请求方法会将参数编码成查询字符串（如:name=xgb&gender=1）。默认为GET, HEAD和DELETE
 @property (nonatomic, strong) NSSet <NSString *> *HTTPMethodsEncodingParametersInURI;
 
 /**
@@ -209,6 +229,8 @@ forHTTPHeaderField:(NSString *)field;
 
  @see AFHTTPRequestQueryStringSerializationStyle
  */
+// 设置queryString序列化类型的方法，代表遵循什么样的规则进行queryString转换。
+// 参数是个枚举，但是这个枚举只有一个值 AFHTTPRequestQueryStringDefaultStyle
 - (void)setQueryStringSerializationWithStyle:(AFHTTPRequestQueryStringSerializationStyle)style;
 
 /**
@@ -216,6 +238,8 @@ forHTTPHeaderField:(NSString *)field;
 
  @param block A block that defines a process of encoding parameters into a query string. This block returns the query string and takes three arguments: the request, the parameters to encode, and the error that occurred when attempting to encode parameters for the given request.
  */
+// 提供了以 block 形式自定义 queryString 转换的接口，
+// 通过block回调的方式,调用者以自己的方式完成 queryString 的转换。
 - (void)setQueryStringSerializationWithBlock:(nullable NSString * _Nullable (^)(NSURLRequest *request, id parameters, NSError * __autoreleasing *error))block;
 
 ///-------------------------------

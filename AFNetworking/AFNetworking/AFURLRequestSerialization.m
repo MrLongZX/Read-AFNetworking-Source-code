@@ -44,6 +44,7 @@ typedef NSString * (^AFQueryStringSerializationBlock)(NSURLRequest *request, id 
     - parameter string: The string to be percent-escaped.
     - returns: The percent-escaped string.
  */
+// 将字符串转化成符合标准的URL编码字符串
 NSString * AFPercentEscapedStringFromString(NSString *string) {
     static NSString * const kAFCharactersGeneralDelimitersToEncode = @":#[]@"; // does not include "?" or "/" due to RFC 3986 - Section 3.4
     static NSString * const kAFCharactersSubDelimitersToEncode = @"!$&'()*+,;=";
@@ -116,6 +117,7 @@ NSString * AFPercentEscapedStringFromString(NSString *string) {
 FOUNDATION_EXPORT NSArray * AFQueryStringPairsFromDictionary(NSDictionary *dictionary);
 FOUNDATION_EXPORT NSArray * AFQueryStringPairsFromKeyAndValue(NSString *key, id value);
 
+// 将字典转换成URL查询字符串
 NSString * AFQueryStringFromParameters(NSDictionary *parameters) {
     NSMutableArray *mutablePairs = [NSMutableArray array];
     for (AFQueryStringPair *pair in AFQueryStringPairsFromDictionary(parameters)) {
@@ -171,6 +173,7 @@ NSArray * AFQueryStringPairsFromKeyAndValue(NSString *key, id value) {
 
 #pragma mark -
 
+// 获取请求序列化需要进行kvo的keypath数组
 static NSArray * AFHTTPRequestSerializerObservedKeyPaths() {
     static NSArray *_AFHTTPRequestSerializerObservedKeyPaths = nil;
     static dispatch_once_t onceToken;
@@ -193,6 +196,7 @@ static void *AFHTTPRequestSerializerObserverContext = &AFHTTPRequestSerializerOb
 
 @implementation AFHTTPRequestSerializer
 
+// 生成序列化对象
 + (instancetype)serializer {
     return [[self alloc] init];
 }
@@ -203,12 +207,16 @@ static void *AFHTTPRequestSerializerObserverContext = &AFHTTPRequestSerializerOb
         return nil;
     }
 
+    // 设置序列化参数默认的字符串编码
     self.stringEncoding = NSUTF8StringEncoding;
 
+    // 请求头字典
     self.mutableHTTPRequestHeaders = [NSMutableDictionary dictionary];
+    // 请求头修改并发队列
     self.requestHeaderModificationQueue = dispatch_queue_create("requestHeaderModificationQueue", DISPATCH_QUEUE_CONCURRENT);
 
     // Accept-Language HTTP Header; see http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.4
+    // 设置请求头 Accept-Language 参数
     NSMutableArray *acceptLanguagesComponents = [NSMutableArray array];
     [[NSLocale preferredLanguages] enumerateObjectsUsingBlock:^(id obj, NSUInteger idx, BOOL *stop) {
         float q = 1.0f - (idx * 0.1f);
@@ -235,13 +243,16 @@ static void *AFHTTPRequestSerializerObserverContext = &AFHTTPRequestSerializerOb
                 userAgent = mutableUserAgent;
             }
         }
+        // 设置请求头 User-Agent 参数
         [self setValue:userAgent forHTTPHeaderField:@"User-Agent"];
     }
 
     // HTTP Method Definitions; see http://www.w3.org/Protocols/rfc2616/rfc2616-sec9.html
+    // 将参数编码成查询字符串的方法
     self.HTTPMethodsEncodingParametersInURI = [NSSet setWithObjects:@"GET", @"HEAD", @"DELETE", nil];
 
     self.mutableObservedChangedKeyPaths = [NSMutableSet set];
+    // 对各属性添加kvo
     for (NSString *keyPath in AFHTTPRequestSerializerObservedKeyPaths()) {
         if ([self respondsToSelector:NSSelectorFromString(keyPath)]) {
             [self addObserver:self forKeyPath:keyPath options:NSKeyValueObservingOptionNew context:AFHTTPRequestSerializerObserverContext];
@@ -252,6 +263,7 @@ static void *AFHTTPRequestSerializerObserverContext = &AFHTTPRequestSerializerOb
 }
 
 - (void)dealloc {
+    // 移除kvo
     for (NSString *keyPath in AFHTTPRequestSerializerObservedKeyPaths()) {
         if ([self respondsToSelector:NSSelectorFromString(keyPath)]) {
             [self removeObserver:self forKeyPath:keyPath context:AFHTTPRequestSerializerObserverContext];
@@ -264,6 +276,8 @@ static void *AFHTTPRequestSerializerObserverContext = &AFHTTPRequestSerializerOb
 // Workarounds for crashing behavior using Key-Value Observing with XCTest
 // See https://github.com/AFNetworking/AFNetworking/issues/2523
 
+// 手动发送属性值改变的kvo通知
+// 防止在XCTest中使用kvo出现崩溃的变通方法
 - (void)setAllowsCellularAccess:(BOOL)allowsCellularAccess {
     [self willChangeValueForKey:NSStringFromSelector(@selector(allowsCellularAccess))];
     _allowsCellularAccess = allowsCellularAccess;
@@ -302,6 +316,7 @@ static void *AFHTTPRequestSerializerObserverContext = &AFHTTPRequestSerializerOb
 
 #pragma mark -
 
+// 获取请求头数据
 - (NSDictionary *)HTTPRequestHeaders {
     NSDictionary __block *value;
     dispatch_sync(self.requestHeaderModificationQueue, ^{
@@ -310,14 +325,18 @@ static void *AFHTTPRequestSerializerObserverContext = &AFHTTPRequestSerializerOb
     return value;
 }
 
+// 设置请求头数据
 - (void)setValue:(NSString *)value
 forHTTPHeaderField:(NSString *)field
 {
+    // 添加栅栏进行阻塞
     dispatch_barrier_sync(self.requestHeaderModificationQueue, ^{
+        // 设置请求头字典数据
         [self.mutableHTTPRequestHeaders setValue:value forKey:field];
     });
 }
 
+// 获取请求头某个字段的值
 - (NSString *)valueForHTTPHeaderField:(NSString *)field {
     NSString __block *value;
     dispatch_sync(self.requestHeaderModificationQueue, ^{
@@ -326,6 +345,7 @@ forHTTPHeaderField:(NSString *)field
     return value;
 }
 
+// 设置授权头字段数据
 - (void)setAuthorizationHeaderFieldWithUsername:(NSString *)username
                                        password:(NSString *)password
 {
@@ -334,19 +354,24 @@ forHTTPHeaderField:(NSString *)field
     [self setValue:[NSString stringWithFormat:@"Basic %@", base64AuthCredentials] forHTTPHeaderField:@"Authorization"];
 }
 
+// 清理授权头字段数据
 - (void)clearAuthorizationHeader {
+    // 添加栅栏进行阻塞
     dispatch_barrier_sync(self.requestHeaderModificationQueue, ^{
         [self.mutableHTTPRequestHeaders removeObjectForKey:@"Authorization"];
     });
 }
 
 #pragma mark -
-
+// 设置查询字符串序列化类型
 - (void)setQueryStringSerializationWithStyle:(AFHTTPRequestQueryStringSerializationStyle)style {
+    // 设置类型
     self.queryStringSerializationStyle = style;
+    // 自定义查询字符串序列化block则无用,设置为nil
     self.queryStringSerialization = nil;
 }
 
+// 设置自定义查询字符串序列化block
 - (void)setQueryStringSerializationWithBlock:(NSString *(^)(NSURLRequest *, id, NSError *__autoreleasing *))block {
     self.queryStringSerialization = block;
 }
@@ -361,13 +386,18 @@ forHTTPHeaderField:(NSString *)field
     NSParameterAssert(method);
     NSParameterAssert(URLString);
 
+    // 创建url对象
     NSURL *url = [NSURL URLWithString:URLString];
 
     NSParameterAssert(url);
 
+    // 创建请求对象
     NSMutableURLRequest *mutableRequest = [[NSMutableURLRequest alloc] initWithURL:url];
+    // 设置http请求方法
     mutableRequest.HTTPMethod = method;
 
+    // 设置请求配置属性
+    //
     for (NSString *keyPath in self.mutableObservedChangedKeyPaths) {
         [mutableRequest setValue:[self valueForKeyPath:keyPath] forKey:keyPath];
     }

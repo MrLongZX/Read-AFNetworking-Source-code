@@ -1263,7 +1263,7 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
         } else {
             // 在指定的安全策略下，服务器信任不被认可
             //
-            // 此关联的 result 错误类型对象，在 AFURLSessionManagerTaskDelegate 的 - (void)URLSession:task:didCompleteWithError:代理方法中，被获取并使用
+            // 此关联的 错误类型对象，在 AFURLSessionManagerTaskDelegate 的 - (void)URLSession:task:didCompleteWithError:代理方法中，被获取并使用
             objc_setAssociatedObject(task, AuthenticationChallengeErrorKey,
                                      [self serverTrustErrorForServerTrust:challenge.protectionSpace.serverTrust url:task.currentRequest.URL],
                                      OBJC_ASSOCIATION_RETAIN);
@@ -1322,26 +1322,31 @@ didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
 
 - (nonnull NSError *)serverTrustErrorForServerTrust:(nullable SecTrustRef)serverTrust url:(nullable NSURL *)url
 {
+    // 获取 com.apple.CFNetwork bundle
     NSBundle *CFNetworkBundle = [NSBundle bundleWithIdentifier:@"com.apple.CFNetwork"];
     NSString *defaultValue = @"The certificate for this server is invalid. You might be connecting to a server that is pretending to be “%@” which could put your confidential information at risk.";
     NSString *descriptionFormat = NSLocalizedStringWithDefaultValue(@"Err-1202.w", nil, CFNetworkBundle, defaultValue, @"") ?: defaultValue;
     NSString *localizedDescription = [descriptionFormat componentsSeparatedByString:@"%@"].count <= 2 ? [NSString localizedStringWithFormat:descriptionFormat, url.host] : descriptionFormat;
+    // 错误信息
     NSMutableDictionary *userInfo = [@{
         NSLocalizedDescriptionKey: localizedDescription
     } mutableCopy];
 
     if (serverTrust) {
+        // 添加 服务器信任 键值对
         userInfo[NSURLErrorFailingURLPeerTrustErrorKey] = (__bridge id)serverTrust;
     }
 
     if (url) {
+        // 添加 URL 键值对
         userInfo[NSURLErrorFailingURLErrorKey] = url;
 
         if (url.absoluteString) {
             userInfo[NSURLErrorFailingURLStringErrorKey] = url.absoluteString;
         }
     }
-
+    
+    // 返回错误对象
     return [NSError errorWithDomain:NSURLErrorDomain code:NSURLErrorServerCertificateUntrusted userInfo:userInfo];
 }
 
