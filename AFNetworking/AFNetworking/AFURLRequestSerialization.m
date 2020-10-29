@@ -102,6 +102,7 @@ NSString * AFPercentEscapedStringFromString(NSString *string) {
     return self;
 }
 
+// 对field/value进行url编码后,进行拼接
 - (NSString *)URLEncodedStringValue {
     if (!self.value || [self.value isEqual:[NSNull null]]) {
         return AFPercentEscapedStringFromString([self.field description]);
@@ -121,9 +122,11 @@ FOUNDATION_EXPORT NSArray * AFQueryStringPairsFromKeyAndValue(NSString *key, id 
 NSString * AFQueryStringFromParameters(NSDictionary *parameters) {
     NSMutableArray *mutablePairs = [NSMutableArray array];
     for (AFQueryStringPair *pair in AFQueryStringPairsFromDictionary(parameters)) {
+        // 通过 pair 进行url编码,获取所有的参数对
         [mutablePairs addObject:[pair URLEncodedStringValue]];
     }
 
+    //将参数对通过 & 拼接成参数字符串
     return [mutablePairs componentsJoinedByString:@"&"];
 }
 
@@ -131,6 +134,7 @@ NSArray * AFQueryStringPairsFromDictionary(NSDictionary *dictionary) {
     return AFQueryStringPairsFromKeyAndValue(nil, dictionary);
 }
 
+// 将字典的每一个键值对生成的对应的AFQueryStringPair对象
 NSArray * AFQueryStringPairsFromKeyAndValue(NSString *key, id value) {
     NSMutableArray *mutableQueryStringComponents = [NSMutableArray array];
 
@@ -139,9 +143,11 @@ NSArray * AFQueryStringPairsFromKeyAndValue(NSString *key, id value) {
     if ([value isKindOfClass:[NSDictionary class]]) {
         NSDictionary *dictionary = value;
         // Sort dictionary keys to ensure consistent ordering in query string, which is important when deserializing potentially ambiguous sequences, such as an array of dictionaries
+        // 对 dictionary 根据 key 进行排序
         for (id nestedKey in [dictionary.allKeys sortedArrayUsingDescriptors:@[ sortDescriptor ]]) {
             id nestedValue = dictionary[nestedKey];
             if (nestedValue) {
+                // 递归将数据添加到查询字符串部件数组中
                 [mutableQueryStringComponents addObjectsFromArray:AFQueryStringPairsFromKeyAndValue((key ? [NSString stringWithFormat:@"%@[%@]", key, nestedKey] : nestedKey), nestedValue)];
             }
         }
@@ -276,7 +282,7 @@ static void *AFHTTPRequestSerializerObserverContext = &AFHTTPRequestSerializerOb
 // Workarounds for crashing behavior using Key-Value Observing with XCTest
 // See https://github.com/AFNetworking/AFNetworking/issues/2523
 
-// 手动发送属性值改变的kvo通知
+// 手动触发属性值改变的kvo通知
 // 防止在XCTest中使用kvo出现崩溃的变通方法
 - (void)setAllowsCellularAccess:(BOOL)allowsCellularAccess {
     [self willChangeValueForKey:NSStringFromSelector(@selector(allowsCellularAccess))];
@@ -396,12 +402,15 @@ forHTTPHeaderField:(NSString *)field
     // 设置http请求方法
     mutableRequest.HTTPMethod = method;
 
-    // 设置请求配置属性
-    //
+    // 请求设置属性
+    // mutableObservedChangedKeyPaths集合是设置了值的属性
     for (NSString *keyPath in self.mutableObservedChangedKeyPaths) {
+        // [self valueForKeyPath:keyPath] : 使用kvc,获取keyPath对应的值
+        // setValue: forKey : 使用kvc给请求设置属性
         [mutableRequest setValue:[self valueForKeyPath:keyPath] forKey:keyPath];
     }
 
+    // 对参数进行序列化,获取新请求
     mutableRequest = [[self requestBySerializingRequest:mutableRequest withParameters:parameters error:error] mutableCopy];
 
 	return mutableRequest;
@@ -506,20 +515,27 @@ forHTTPHeaderField:(NSString *)field
 {
     NSParameterAssert(request);
 
+    // copy请求
     NSMutableURLRequest *mutableRequest = [request mutableCopy];
 
+    // 遍历请求头数据
     [self.HTTPRequestHeaders enumerateKeysAndObjectsUsingBlock:^(id field, id value, BOOL * __unused stop) {
+        // 请求对应属性字段field的值为空
         if (![request valueForHTTPHeaderField:field]) {
+            // 请求设置属性
             [mutableRequest setValue:value forHTTPHeaderField:field];
         }
     }];
 
     NSString *query = nil;
     if (parameters) {
+        // 查询字符串block存在
         if (self.queryStringSerialization) {
             NSError *serializationError;
+            // 调用block,开发者处理参数序列化
             query = self.queryStringSerialization(request, parameters, &serializationError);
 
+            // 出现错误
             if (serializationError) {
                 if (error) {
                     *error = serializationError;
@@ -530,14 +546,17 @@ forHTTPHeaderField:(NSString *)field
         } else {
             switch (self.queryStringSerializationStyle) {
                 case AFHTTPRequestQueryStringDefaultStyle:
+                    // 将字典转换成URL查询字符串
                     query = AFQueryStringFromParameters(parameters);
                     break;
             }
         }
     }
 
+    // 请求方法 包含在 需要对参数进行编码的方法数组中
     if ([self.HTTPMethodsEncodingParametersInURI containsObject:[[request HTTPMethod] uppercaseString]]) {
         if (query && query.length > 0) {
+            // 请求url 拼接 参数转换的查询字符串
             mutableRequest.URL = [NSURL URLWithString:[[mutableRequest.URL absoluteString] stringByAppendingFormat:mutableRequest.URL.query ? @"&%@" : @"?%@", query]];
         }
     } else {
@@ -545,9 +564,11 @@ forHTTPHeaderField:(NSString *)field
         if (!query) {
             query = @"";
         }
+        // 请求设置 Content-Type 字段
         if (![mutableRequest valueForHTTPHeaderField:@"Content-Type"]) {
             [mutableRequest setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
         }
+        // 请求将参数转换的查询字符串设置为请求体
         [mutableRequest setHTTPBody:[query dataUsingEncoding:self.stringEncoding]];
     }
 
@@ -557,10 +578,12 @@ forHTTPHeaderField:(NSString *)field
 #pragma mark - NSKeyValueObserving
 
 + (BOOL)automaticallyNotifiesObserversForKey:(NSString *)key {
+    // key在kvo数组中,则手动触发kvo
     if ([AFHTTPRequestSerializerObservedKeyPaths() containsObject:key]) {
         return NO;
     }
 
+    // 传给父类,自动触发kvo
     return [super automaticallyNotifiesObserversForKey:key];
 }
 
@@ -569,10 +592,13 @@ forHTTPHeaderField:(NSString *)field
                         change:(NSDictionary *)change
                        context:(void *)context
 {
+    // 判断 context,区分是否是本类添加的kvo
     if (context == AFHTTPRequestSerializerObserverContext) {
         if ([change[NSKeyValueChangeNewKey] isEqual:[NSNull null]]) {
+            // keyPath 对应的属性被开发者设置的值为 null,则将keyPath从修改KeyPath集合中移除
             [self.mutableObservedChangedKeyPaths removeObject:keyPath];
         } else {
+            // keyPath 对应的属性被开发者设置了值,添加到修改KeyPath集合中
             [self.mutableObservedChangedKeyPaths addObject:keyPath];
         }
     }
