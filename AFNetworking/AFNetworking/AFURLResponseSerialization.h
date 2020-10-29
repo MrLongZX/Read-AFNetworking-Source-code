@@ -34,6 +34,7 @@ FOUNDATION_EXPORT id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJ
 
  For example, a JSON response serializer may check for an acceptable status code (`2XX` range) and content type (`application/json`), decoding a valid JSON response into an object.
  */
+// 定义响应序列化协议,并默认遵循其他三个协议
 @protocol AFURLResponseSerialization <NSObject, NSSecureCoding, NSCopying>
 
 /**
@@ -58,6 +59,7 @@ FOUNDATION_EXPORT id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJ
 
  Any request or response serializer dealing with HTTP is encouraged to subclass `AFHTTPResponseSerializer` in order to ensure consistent default behavior.
  */
+// 声明 AFHTTPResponseSerializer 类, 遵循 AFURLResponseSerialization 协议
 @interface AFHTTPResponseSerializer : NSObject <AFURLResponseSerialization>
 
 - (instancetype)init;
@@ -76,11 +78,13 @@ FOUNDATION_EXPORT id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJ
 
  See http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html
  */
+// 可接受的状态码。当不为nil时，如果返回的状态码不包含在该set中将在校验过程中导致错误
 @property (nonatomic, copy, nullable) NSIndexSet *acceptableStatusCodes;
 
 /**
  The acceptable MIME types for responses. When non-`nil`, responses with a `Content-Type` with MIME types that do not intersect with the set will result in an error during validation.
  */
+// 可接受的MIME类型。当不为nil时，如果返回的Content-Type不包含在该set中将在校验过程中导致错误
 @property (nonatomic, copy, nullable) NSSet <NSString *> *acceptableContentTypes;
 
 /**
@@ -94,6 +98,8 @@ FOUNDATION_EXPORT id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJ
 
  @return `YES` if the response is valid, otherwise `NO`.
  */
+// 校验指定的响应和数据。
+// 在它的基础实现中，这个方法检测了可接受的状态码和数据类型。子类可以添加其他特定的检测。
 - (BOOL)validateResponse:(nullable NSHTTPURLResponse *)response
                     data:(nullable NSData *)data
                    error:(NSError * _Nullable __autoreleasing *)error;
@@ -121,11 +127,13 @@ FOUNDATION_EXPORT id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJ
 /**
  Options for reading the response JSON data and creating the Foundation objects. For possible values, see the `NSJSONSerialization` documentation section "NSJSONReadingOptions". `0` by default.
  */
+// json数据读取选项
 @property (nonatomic, assign) NSJSONReadingOptions readingOptions;
 
 /**
  Whether to remove keys with `NSNull` values from response JSON. Defaults to `NO`.
  */
+// 是否移除响应数据中值为NSNull的key,默认NO
 @property (nonatomic, assign) BOOL removesKeysWithNullValues;
 
 /**
@@ -133,6 +141,7 @@ FOUNDATION_EXPORT id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJ
 
  @param readingOptions The specified JSON reading options.
  */
+// 设置json序列化读写选项
 + (instancetype)serializerWithReadingOptions:(NSJSONReadingOptions)readingOptions;
 
 @end
