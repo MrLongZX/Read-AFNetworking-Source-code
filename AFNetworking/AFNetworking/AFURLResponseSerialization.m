@@ -35,21 +35,26 @@ NSString * const AFURLResponseSerializationErrorDomain = @"com.alamofire.error.s
 NSString * const AFNetworkingOperationFailingURLResponseErrorKey = @"com.alamofire.serialization.response.error.response";
 NSString * const AFNetworkingOperationFailingURLResponseDataErrorKey = @"com.alamofire.serialization.response.error.data";
 
+// 该方法用于将一个NSError对象作为另一个NSError对象的附属NSError对象，并将其放到userInfo属性NSUnderlyingErrorKey键对应的值中
 static NSError * AFErrorWithUnderlyingError(NSError *error, NSError *underlyingError) {
     if (!error) {
+        // error为空的话就直接返回underlyingError
         return underlyingError;
     }
 
     if (!underlyingError || error.userInfo[NSUnderlyingErrorKey]) {
+         // 如果underlyingError为空或者error中已经有附属underlyingError就直接返回error
         return error;
     }
 
+    // 获取error的userInfo，并将underlyingError作为键NSUnderlyingErrorKey对应的值赋给error
     NSMutableDictionary *mutableUserInfo = [error.userInfo mutableCopy];
     mutableUserInfo[NSUnderlyingErrorKey] = underlyingError;
 
     return [[NSError alloc] initWithDomain:error.domain code:error.code userInfo:mutableUserInfo];
 }
 
+// 该方法用于判断error或者underlyingError是否为指定code和domain的error
 static BOOL AFErrorOrUnderlyingErrorHasCodeInDomain(NSError *error, NSInteger code, NSString *domain) {
     if ([error.domain isEqualToString:domain] && error.code == code) {
         return YES;
@@ -60,9 +65,11 @@ static BOOL AFErrorOrUnderlyingErrorHasCodeInDomain(NSError *error, NSInteger co
     return NO;
 }
 
-// 移除value是null的key
+// 该方法用于过滤解析后的json数据中NSDictionary类型数据值为Null的键
 id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJSONReadingOptions readingOptions) {
+    // 如果解析后的json数据是NSArray类型的
     if ([JSONObject isKindOfClass:[NSArray class]]) {
+        // 遍历元素如果还是NSArray类型的就递归调用本方法直至元素不为NSArray类型
         NSMutableArray *mutableArray = [NSMutableArray arrayWithCapacity:[(NSArray *)JSONObject count]];
         for (id value in (NSArray *)JSONObject) {
             if (![value isEqual:[NSNull null]]) {
@@ -70,21 +77,28 @@ id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJSONReadingOptions 
             }
         }
 
+        // 根据传入参数的可变性来返回对应可变性的NSArray对象
         return (readingOptions & NSJSONReadingMutableContainers) ? mutableArray : [NSArray arrayWithArray:mutableArray];
+    // 如果解析后的json数据是NSDictionary类型的
     } else if ([JSONObject isKindOfClass:[NSDictionary class]]) {
+         // 遍历所有的key并取出对应的value
         NSMutableDictionary *mutableDictionary = [NSMutableDictionary dictionaryWithDictionary:JSONObject];
         for (id <NSCopying> key in [(NSDictionary *)JSONObject allKeys]) {
             id value = (NSDictionary *)JSONObject[key];
+            // 如果value不存在或者是NSNull类型的对象，就将其移除
             if (!value || [value isEqual:[NSNull null]]) {
                 [mutableDictionary removeObjectForKey:key];
+            // 如果value是NSArray或者NSDictionary类型的对象就递归调用本方法直至元素不为NSArray或者NSDictionary类型的对象
             } else if ([value isKindOfClass:[NSArray class]] || [value isKindOfClass:[NSDictionary class]]) {
                 mutableDictionary[key] = AFJSONObjectByRemovingKeysWithNullValues(value, readingOptions);
             }
         }
 
+        // 根据传入参数的可变性来返回对应可变性的NSDictionary对象
         return (readingOptions & NSJSONReadingMutableContainers) ? mutableDictionary : [NSDictionary dictionaryWithDictionary:mutableDictionary];
     }
 
+    // 如果不是是NSArray或者NSDictionary类型的对象就直接返回
     return JSONObject;
 }
 
@@ -100,9 +114,9 @@ id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJSONReadingOptions 
         return nil;
     }
 
-    // 默认可接受状态码
+    // 默认可接受状态码,200~299之间
     self.acceptableStatusCodes = [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(200, 100)];
-    // 默认可接受MIME类型
+    // 默认可接受媒体类型
     self.acceptableContentTypes = nil;
 
     return self;
@@ -120,12 +134,12 @@ id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJSONReadingOptions 
     NSError *validationError = nil;
 
     if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
-        // 存在可接受MIME类型 &&  可接受MIME类型 与 响应的MIME类型不一致 && (响应的MIME类型不为空 或者 数据不为空)
+        // 存在可接受媒体类型 &&  可接受媒体类型 与 响应的媒体类型不一致 && (响应的媒体类型不为空 或者 数据不为空)
         if (self.acceptableContentTypes && ![self.acceptableContentTypes containsObject:[response MIMEType]] &&
             !([response MIMEType] == nil && [data length] == 0)) {
 
             if ([data length] > 0 && [response URL]) {
-                // 编辑 MIME类型 与 url 错误信息
+                // 编辑 媒体类型 与 url 错误信息
                 NSMutableDictionary *mutableUserInfo = [@{
                                                           NSLocalizedDescriptionKey: [NSString stringWithFormat:NSLocalizedStringFromTable(@"Request failed: unacceptable content-type: %@", @"AFNetworking", nil), [response MIMEType]],
                                                           NSURLErrorFailingURLErrorKey:[response URL],
@@ -165,6 +179,7 @@ id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJSONReadingOptions 
         }
     }
 
+     // 如果传了NSError对象，并且响应无效，就赋值后返回错误信息
     if (error && !responseIsValid) {
         *error = validationError;
     }
@@ -187,6 +202,7 @@ id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJSONReadingOptions 
 #pragma mark - NSSecureCoding
 
 + (BOOL)supportsSecureCoding {
+    // 如果一个类符合 NSSecureCoding 协议并在 + supportsSecureCoding 返回 YES，就声明了它可以处理本身实例的编码解码方式，以防止替换攻击
     return YES;
 }
 
@@ -240,7 +256,7 @@ id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJSONReadingOptions 
     if (!self) {
         return nil;
     }
-    // 默认可接受MIME类型
+    // 默认可接受媒体类型
     self.acceptableContentTypes = [NSSet setWithObjects:@"application/json", @"text/json", @"text/javascript", nil];
 
     return self;
@@ -253,7 +269,7 @@ id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJSONReadingOptions 
                            data:(NSData *)data
                           error:(NSError *__autoreleasing *)error
 {
-    // 验证响应和数据的 可接受MIME类型 和 可接受状态码
+    // 验证响应和数据的 可接受媒体类型 和 可接受状态码
     if (![self validateResponse:(NSHTTPURLResponse *)response data:data error:error]) {
         if (!error || AFErrorOrUnderlyingErrorHasCodeInDomain(*error, NSURLErrorCannotDecodeContentData, AFURLResponseSerializationErrorDomain)) {
             return nil;
@@ -344,6 +360,7 @@ id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJSONReadingOptions 
         return nil;
     }
 
+    // 默认可接受媒体类型
     self.acceptableContentTypes = [[NSSet alloc] initWithObjects:@"application/xml", @"text/xml", nil];
 
     return self;
@@ -355,12 +372,14 @@ id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJSONReadingOptions 
                            data:(NSData *)data
                           error:(NSError *__autoreleasing *)error
 {
+    // 验证响应和数据的 可接受媒体类型 和 可接受状态码
     if (![self validateResponse:(NSHTTPURLResponse *)response data:data error:error]) {
         if (!error || AFErrorOrUnderlyingErrorHasCodeInDomain(*error, NSURLErrorCannotDecodeContentData, AFURLResponseSerializationErrorDomain)) {
             return nil;
         }
     }
-
+    
+    // 返回NSXMLParser对象
     return [[NSXMLParser alloc] initWithData:data];
 }
 
@@ -563,6 +582,7 @@ static NSLock* imageLock = nil;
 
 @implementation UIImage (AFNetworkingSafeImageLoading)
 
+// 通过加锁实现线程安全创建图片对象
 + (UIImage *)af_safeImageWithData:(NSData *)data {
     UIImage* image = nil;
     static dispatch_once_t onceToken;
@@ -578,33 +598,62 @@ static NSLock* imageLock = nil;
 
 @end
 
+// 生成对应缩放因子的图片
 static UIImage * AFImageWithDataAtScale(NSData *data, CGFloat scale) {
+    // 根据二进制数据安全生成图片对象
     UIImage *image = [UIImage af_safeImageWithData:data];
     if (image.images) {
+        // 如果是gif图就直接返回图片对象
         return image;
     }
     
+    // 生成对应缩放因子的图片
     return [[UIImage alloc] initWithCGImage:[image CGImage] scale:scale orientation:image.imageOrientation];
 }
 
+
+// 为什么要费这么大劲解压图片呢？
+/*
+ 现在的网络图像PNG和JPG都是压缩格式，需要把它们解压转成bitmap后才能渲染到屏幕上.
+ 如果我们不解压图片,直接调用UIImage的imageWithData:方法把数据转成UIImage对象，再把UIImage赋给UIImageView，
+ 那在渲染之前底层会判断到UIImage对象未解压，没有bitmap数据，这时会在主线程对图片进行解压操作，再渲染到屏幕上。
+ 这个解压操作是比较耗时的，如果任由它在主线程做，可能会导致速度慢UI卡顿的问题。
+ */
+/*
+ AFImageResponseSerializer除了把返回数据解析成UIImage外，还会把图像数据解压，这个处理是在子线程（AFNetworking专用的一条线程，详见AFURLSessionManager），处理后上层
+ 使用返回的UIImage在主线程渲染时就不需要做解压这步操作，主线程减轻了负担，减少了UI卡顿问题。
+ 
+ 具体实现上在AFInflatedImageFromResponseWithDataAtScale里，创建一个画布，把UIImage画在画布上，再把这个画布保存成UIImage返回给上层。
+ 只有JPG和PNG才会尝试去做解压操作，期间如果解压失败，或者遇到CMKY颜色格式的jpg，或者图像太大
+ (解压后的bitmap太占内存，一个像素3-4字节，搞不好内存就爆掉了)，就直接返回未解压的图像。
+ */
+// 生成对应缩放因子的图片并进行解压
 static UIImage * AFInflatedImageFromResponseWithDataAtScale(NSHTTPURLResponse *response, NSData *data, CGFloat scale) {
     if (!data || [data length] == 0) {
         return nil;
     }
 
+    // 创建画布和图片数据提供者
     CGImageRef imageRef = NULL;
     CGDataProviderRef dataProvider = CGDataProviderCreateWithCFData((__bridge CFDataRef)data);
 
     if ([response.MIMEType isEqualToString:@"image/png"]) {
+        // 如果是png格式直接解压
         imageRef = CGImageCreateWithPNGDataProvider(dataProvider,  NULL, true, kCGRenderingIntentDefault);
     } else if ([response.MIMEType isEqualToString:@"image/jpeg"]) {
+        // 如果是jpg格式
+        // 先进行解压
         imageRef = CGImageCreateWithJPEGDataProvider(dataProvider, NULL, true, kCGRenderingIntentDefault);
 
         if (imageRef) {
+            // 如果解压成功
+            // 获取色彩空间
             CGColorSpaceRef imageColorSpace = CGImageGetColorSpace(imageRef);
+            // 获取色彩空间模式
             CGColorSpaceModel imageColorSpaceModel = CGColorSpaceGetModel(imageColorSpace);
 
             // CGImageCreateWithJPEGDataProvider does not properly handle CMKY, so fall back to AFImageWithDataAtScale
+            // 如果jpg的色彩空间是CMKY而不是RGB的话，不进行解压
             if (imageColorSpaceModel == kCGColorSpaceModelCMYK) {
                 CGImageRelease(imageRef);
                 imageRef = NULL;
@@ -612,31 +661,39 @@ static UIImage * AFInflatedImageFromResponseWithDataAtScale(NSHTTPURLResponse *r
         }
     }
 
+    // 释放图片数据提供者
     CGDataProviderRelease(dataProvider);
 
+    // 按照缩放因子生成对应的图片
     UIImage *image = AFImageWithDataAtScale(data, scale);
     if (!imageRef) {
+        // 如果没有解压成功
         if (image.images || !image) {
+            // 如果是gif图或者没有生成图片就直接返回
             return image;
         }
 
         imageRef = CGImageCreateCopy([image CGImage]);
         if (!imageRef) {
+            // 如果没有生成图片画布就直接返回
             return nil;
         }
     }
 
+    // 获取图片尺寸和一个像素占用的字节数
     size_t width = CGImageGetWidth(imageRef);
     size_t height = CGImageGetHeight(imageRef);
     size_t bitsPerComponent = CGImageGetBitsPerComponent(imageRef);
 
     if (width * height > 1024 * 1024 || bitsPerComponent > 8) {
+        // 如果图片太大或者一个像素占用的字节超过8就不解压了
         CGImageRelease(imageRef);
 
         return image;
     }
 
     // CGImageGetBytesPerRow() calculates incorrectly in iOS 5.0, so defer to CGBitmapContextCreate
+    // 配置绘图上下文的参数
     size_t bytesPerRow = 0;
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
     CGColorSpaceModel colorSpaceModel = CGColorSpaceGetModel(colorSpace);
@@ -656,23 +713,30 @@ static UIImage * AFInflatedImageFromResponseWithDataAtScale(NSHTTPURLResponse *r
 #pragma clang diagnostic pop
     }
 
+    // 生成绘图上下文
     CGContextRef context = CGBitmapContextCreate(NULL, width, height, bitsPerComponent, bytesPerRow, colorSpace, bitmapInfo);
 
+    // 释放色彩空间
     CGColorSpaceRelease(colorSpace);
 
     if (!context) {
+        // 如果没有成功生成绘图上下文就释放画布并直接返回
         CGImageRelease(imageRef);
 
         return image;
     }
 
+    // 绘制图片
     CGContextDrawImage(context, CGRectMake(0.0f, 0.0f, width, height), imageRef);
     CGImageRef inflatedImageRef = CGBitmapContextCreateImage(context);
 
+     // 释放绘图上下文
     CGContextRelease(context);
 
+    // 生成图片
     UIImage *inflatedImage = [[UIImage alloc] initWithCGImage:inflatedImageRef scale:scale orientation:image.imageOrientation];
 
+    // 释放画布
     CGImageRelease(inflatedImageRef);
     CGImageRelease(imageRef);
 
@@ -689,10 +753,13 @@ static UIImage * AFInflatedImageFromResponseWithDataAtScale(NSHTTPURLResponse *r
         return nil;
     }
 
+    // 默认可接受媒体类型
     self.acceptableContentTypes = [[NSSet alloc] initWithObjects:@"image/tiff", @"image/jpeg", @"image/gif", @"image/png", @"image/ico", @"image/x-icon", @"image/bmp", @"image/x-bmp", @"image/x-xbitmap", @"image/x-win-bitmap", nil];
 
 #if TARGET_OS_IOS || TARGET_OS_TV
+    // 图片的缩放因子
     self.imageScale = [[UIScreen mainScreen] scale];
+    // 对响应图片自动解压
     self.automaticallyInflatesResponseImage = YES;
 #elif TARGET_OS_WATCH
     self.imageScale = [[WKInterfaceDevice currentDevice] screenScale];
@@ -708,6 +775,7 @@ static UIImage * AFInflatedImageFromResponseWithDataAtScale(NSHTTPURLResponse *r
                            data:(NSData *)data
                           error:(NSError *__autoreleasing *)error
 {
+    // 验证响应和数据的 可接受媒体类型 和 可接受状态码
     if (![self validateResponse:(NSHTTPURLResponse *)response data:data error:error]) {
         if (!error || AFErrorOrUnderlyingErrorHasCodeInDomain(*error, NSURLErrorCannotDecodeContentData, AFURLResponseSerializationErrorDomain)) {
             return nil;
@@ -715,12 +783,18 @@ static UIImage * AFInflatedImageFromResponseWithDataAtScale(NSHTTPURLResponse *r
     }
 
 #if TARGET_OS_IOS || TARGET_OS_TV || TARGET_OS_WATCH
+    // 在移动端需要手动解压
     if (self.automaticallyInflatesResponseImage) {
+        // 图片自定解压
+        // 生成对应缩放因子的图片并进行解压
         return AFInflatedImageFromResponseWithDataAtScale((NSHTTPURLResponse *)response, data, self.imageScale);
     } else {
+        // 图片不自动解压
+        // 获取图片
         return AFImageWithDataAtScale(data, self.imageScale);
     }
 #else
+    // 在MAC上可以直接调用系统方法解压
     // Ensure that the image is set to it's correct pixel width and height
     NSBitmapImageRep *bitimage = [[NSBitmapImageRep alloc] initWithData:data];
     NSImage *image = [[NSImage alloc] initWithSize:NSMakeSize([bitimage pixelsWide], [bitimage pixelsHigh])];

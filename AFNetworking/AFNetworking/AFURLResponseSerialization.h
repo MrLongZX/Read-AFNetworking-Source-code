@@ -78,13 +78,13 @@ FOUNDATION_EXPORT id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJ
 
  See http://www.w3.org/Protocols/rfc2616/rfc2616-sec10.html
  */
-// 可接受的状态码。当不为nil时，如果返回的状态码不包含在该set中将在校验过程中导致错误
+// 可接受的状态码集合，如果返回的状态码不在集合中则会验证时报错
 @property (nonatomic, copy, nullable) NSIndexSet *acceptableStatusCodes;
 
 /**
  The acceptable MIME types for responses. When non-`nil`, responses with a `Content-Type` with MIME types that do not intersect with the set will result in an error during validation.
  */
-// 可接受的MIME类型。当不为nil时，如果返回的Content-Type不包含在该set中将在校验过程中导致错误
+// 可接受的Content-Type集合，如果返回的类型不在集合中则会验证时报错
 @property (nonatomic, copy, nullable) NSSet <NSString *> *acceptableContentTypes;
 
 /**
@@ -127,7 +127,7 @@ FOUNDATION_EXPORT id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJ
 /**
  Options for reading the response JSON data and creating the Foundation objects. For possible values, see the `NSJSONSerialization` documentation section "NSJSONReadingOptions". `0` by default.
  */
-// json数据读取选项
+// json数据解析选项
 @property (nonatomic, assign) NSJSONReadingOptions readingOptions;
 
 /**
@@ -141,7 +141,7 @@ FOUNDATION_EXPORT id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJ
 
  @param readingOptions The specified JSON reading options.
  */
-// 设置json序列化读写选项
+// 设置json解析选项
 + (instancetype)serializerWithReadingOptions:(NSJSONReadingOptions)readingOptions;
 
 @end
@@ -172,6 +172,7 @@ FOUNDATION_EXPORT id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJ
  - `application/xml`
  - `text/xml`
  */
+// 当服务器返回的数据类型为XML时，用这个类进行解析，但这个类只返回NSXMLParser对象，具体的解析还要通过实现代理手动解析
 @interface AFXMLDocumentResponseSerializer : AFHTTPResponseSerializer
 
 - (instancetype)init;
@@ -244,17 +245,20 @@ FOUNDATION_EXPORT id AFJSONObjectByRemovingKeysWithNullValues(id JSONObject, NSJ
  - `image/x-xbitmap`
  - `image/x-win-bitmap`
  */
+// 解析服务器返回的图片数据的
 @interface AFImageResponseSerializer : AFHTTPResponseSerializer
 
 #if TARGET_OS_IOS || TARGET_OS_TV || TARGET_OS_WATCH
 /**
  The scale factor used when interpreting the image data to construct `responseImage`. Specifying a scale factor of 1.0 results in an image whose size matches the pixel-based dimensions of the image. Applying a different scale factor changes the size of the image as reported by the size property. This is set to the value of scale of the main screen by default, which automatically scales images for retina displays, for instance.
  */
+// 图片的缩放因子，默认为屏幕的缩放因子
 @property (nonatomic, assign) CGFloat imageScale;
 
 /**
  Whether to automatically inflate response image data for compressed formats (such as PNG or JPEG). Enabling this can significantly improve drawing performance on iOS when used with `setCompletionBlockWithSuccess:failure:`, as it allows a bitmap representation to be constructed in the background rather than on the main thread. `YES` by default.
  */
+// 是否对服务器返回的图片进行自动解压，默认为自动解压
 @property (nonatomic, assign) BOOL automaticallyInflatesResponseImage;
 #endif
 
