@@ -100,7 +100,7 @@ typedef NS_ENUM(NSUInteger, AFHTTPRequestQueryStringSerializationStyle) {
 /**
  The string encoding used to serialize parameters. `NSUTF8StringEncoding` by default.
  */
-// 字符串编码方式
+// 字符串编码方式 默认为NSUTF8StringEncoding
 @property (nonatomic, assign) NSStringEncoding stringEncoding;
 
 /**
@@ -108,7 +108,7 @@ typedef NS_ENUM(NSUInteger, AFHTTPRequestQueryStringSerializationStyle) {
 
  @see NSMutableURLRequest -setAllowsCellularAccess:
  */
-// 是否允许使用设备蜂窝数据
+// 是否允许使用设备蜂窝数据 默认为是
 @property (nonatomic, assign) BOOL allowsCellularAccess;
 
 /**
@@ -116,7 +116,7 @@ typedef NS_ENUM(NSUInteger, AFHTTPRequestQueryStringSerializationStyle) {
 
  @see NSMutableURLRequest -setCachePolicy:
  */
-// 缓存策略
+// 请求的缓存策略
 @property (nonatomic, assign) NSURLRequestCachePolicy cachePolicy;
 
 /**
@@ -124,7 +124,7 @@ typedef NS_ENUM(NSUInteger, AFHTTPRequestQueryStringSerializationStyle) {
 
  @see NSMutableURLRequest -setHTTPShouldHandleCookies:
  */
-// 是否用cookie来处理创建的请求
+// 是否将cookies添加到request的header中一同发送给服务器，默认为是
 @property (nonatomic, assign) BOOL HTTPShouldHandleCookies;
 
 /**
@@ -132,7 +132,7 @@ typedef NS_ENUM(NSUInteger, AFHTTPRequestQueryStringSerializationStyle) {
 
  @see NSMutableURLRequest -setHTTPShouldUsePipelining:
  */
-// 创建的请求在收到上个传输（transmission）响应之前是否继续发送数据。默认为NO(即等待上次传输完成后再请求)
+// 是否使用管线化，即是否要等到收到前一个请求的响应后才能发送后一个请求，管线化可以一个发送一组请求，不必等待，默认为否
 @property (nonatomic, assign) BOOL HTTPShouldUsePipelining;
 
 /**
@@ -140,8 +140,7 @@ typedef NS_ENUM(NSUInteger, AFHTTPRequestQueryStringSerializationStyle) {
 
  @see NSMutableURLRequest -setNetworkServiceType:
  */
-// 请求的网络服务类型。
-// 这个服务类型向整个网络传输层次提供了一个关于该请求目的的提示。
+// 网络服务类型，系统会根据设置的类型自动优化
 @property (nonatomic, assign) NSURLRequestNetworkServiceType networkServiceType;
 
 /**
@@ -165,17 +164,17 @@ typedef NS_ENUM(NSUInteger, AFHTTPRequestQueryStringSerializationStyle) {
  @discussion To add or remove default request headers, use `setValue:forHTTPHeaderField:`.
  */
 /**
-  序列请求的默认请求头。
+  请求头信息
   默认值包括:
   'Accept-Language’ 内容为'NSLocale +preferredLanguages’ 方法获取的语言
   'User-Agent’ 内容为各种bundle的标志系统信息
-  可以使用'setValue:forHTTPHeaderField:’方法添加或删除请求头
 */
 @property (readonly, nonatomic, strong) NSDictionary <NSString *, NSString *> *HTTPRequestHeaders;
 
 /**
  Creates and returns a serializer with default configuration.
  */
+// 实例化默认设置对象的方法
 + (instancetype)serializer;
 
 /**
@@ -184,6 +183,7 @@ typedef NS_ENUM(NSUInteger, AFHTTPRequestQueryStringSerializationStyle) {
  @param field The HTTP header to set a default value for
  @param value The value set as default for the specified header, or `nil`
  */
+// 设置请求头的字段和值，如果值为nil就移除该字段
 - (void)setValue:(nullable NSString *)value
 forHTTPHeaderField:(NSString *)field;
 
@@ -194,6 +194,7 @@ forHTTPHeaderField:(NSString *)field;
 
  @return The value set as default for the specified header, or `nil`
  */
+// 获取请求头指定字段的值
 - (nullable NSString *)valueForHTTPHeaderField:(NSString *)field;
 
 /**
@@ -202,14 +203,14 @@ forHTTPHeaderField:(NSString *)field;
  @param username The HTTP basic auth username
  @param password The HTTP basic auth password
  */
-// 设置授权 http 头数据
+// 利用账号和密码为请求头的“Authorization”字段赋值
 - (void)setAuthorizationHeaderFieldWithUsername:(NSString *)username
                                        password:(NSString *)password;
 
 /**
  Clears any existing value for the "Authorization" HTTP header.
  */
-// 请求授权头数据
+// 从请求头中清除“Authorization”字段的值
 - (void)clearAuthorizationHeader;
 
 ///-------------------------------------------------------
@@ -219,7 +220,7 @@ forHTTPHeaderField:(NSString *)field;
 /**
  HTTP methods for which serialized requests will encode parameters as a query string. `GET`, `HEAD`, and `DELETE` by default.
  */
-// 哪些HTTP请求方法会将参数编码成查询字符串（如:name=xgb&gender=1）。默认为GET, HEAD和DELETE
+// 要把查询字符串编码拼接到URL后面的HTTP请求方法集合，默认为GET、HEAD和DELETE
 @property (nonatomic, strong) NSSet <NSString *> *HTTPMethodsEncodingParametersInURI;
 
 /**
@@ -229,8 +230,7 @@ forHTTPHeaderField:(NSString *)field;
 
  @see AFHTTPRequestQueryStringSerializationStyle
  */
-// 设置queryString序列化类型的方法，代表遵循什么样的规则进行queryString转换。
-// 参数是个枚举，但是这个枚举只有一个值 AFHTTPRequestQueryStringDefaultStyle
+// 设置查询字符串的编码方法，目前AFNetworking只实现了一种，即百分号编码
 - (void)setQueryStringSerializationWithStyle:(AFHTTPRequestQueryStringSerializationStyle)style;
 
 /**
@@ -238,8 +238,7 @@ forHTTPHeaderField:(NSString *)field;
 
  @param block A block that defines a process of encoding parameters into a query string. This block returns the query string and takes three arguments: the request, the parameters to encode, and the error that occurred when attempting to encode parameters for the given request.
  */
-// 提供了以 block 形式自定义 queryString 转换的接口，
-// 通过block回调的方式,调用者以自己的方式完成 queryString 的转换。
+// 设置自定义的查询字符串编码方法，只需要在block中实现编码即可
 - (void)setQueryStringSerializationWithBlock:(nullable NSString * _Nullable (^)(NSURLRequest *request, id parameters, NSError * __autoreleasing *error))block;
 
 ///-------------------------------
@@ -258,6 +257,8 @@ forHTTPHeaderField:(NSString *)field;
 
  @return An `NSMutableURLRequest` object.
  */
+// 利用传入的HTTP请求方法、请求URL和请求参数三个参数生成NSMutableURLRequest对象。
+// 当HTTP请求方法为GET、HEAD或DELETE时，参数会拼接到URL后面，否则，就添加到请求体中
 - (nullable NSMutableURLRequest *)requestWithMethod:(NSString *)method
                                           URLString:(NSString *)URLString
                                          parameters:(nullable id)parameters
@@ -276,6 +277,7 @@ forHTTPHeaderField:(NSString *)field;
 
  @return An `NSMutableURLRequest` object
  */
+// 利用传入的HTTP请求方法、请求URL和请求参数三个参数生成multipart/form-dat请求的NSMutableURLRequest对象。
 - (NSMutableURLRequest *)multipartFormRequestWithMethod:(NSString *)method
                                               URLString:(NSString *)URLString
                                              parameters:(nullable NSDictionary <NSString *, id> *)parameters
@@ -293,6 +295,7 @@ forHTTPHeaderField:(NSString *)field;
 
  @see https://github.com/AFNetworking/AFNetworking/issues/1398
  */
+// 移除掉原request中的HTTPBodyStream，并异步写到指定路径下，并返回NSMutableURLRequest对象
 - (NSMutableURLRequest *)requestWithMultipartFormRequest:(NSURLRequest *)request
                              writingStreamContentsToFile:(NSURL *)fileURL
                                        completionHandler:(nullable void (^)(NSError * _Nullable error))handler;
@@ -317,6 +320,7 @@ forHTTPHeaderField:(NSString *)field;
 
  @return `YES` if the file data was successfully appended, otherwise `NO`.
  */
+// 将指定路径下数据添加到表单中
 - (BOOL)appendPartWithFileURL:(NSURL *)fileURL
                          name:(NSString *)name
                         error:(NSError * _Nullable __autoreleasing *)error;
@@ -332,6 +336,7 @@ forHTTPHeaderField:(NSString *)field;
 
  @return `YES` if the file data was successfully appended otherwise `NO`.
  */
+// 将指定路径下数据添加到表单中，并指定文件类型
 - (BOOL)appendPartWithFileURL:(NSURL *)fileURL
                          name:(NSString *)name
                      fileName:(NSString *)fileName
@@ -347,6 +352,7 @@ forHTTPHeaderField:(NSString *)field;
  @param length The length of the specified input stream in bytes.
  @param mimeType The MIME type of the specified data. (For example, the MIME type for a JPEG image is image/jpeg.) For a list of valid MIME types, see http://www.iana.org/assignments/media-types/. This parameter must not be `nil`.
  */
+// 将指定输入流中的数据添加到表单中
 - (void)appendPartWithInputStream:(nullable NSInputStream *)inputStream
                              name:(NSString *)name
                          fileName:(NSString *)fileName
@@ -361,6 +367,7 @@ forHTTPHeaderField:(NSString *)field;
  @param fileName The filename to be associated with the specified data. This parameter must not be `nil`.
  @param mimeType The MIME type of the specified data. (For example, the MIME type for a JPEG image is image/jpeg.) For a list of valid MIME types, see http://www.iana.org/assignments/media-types/. This parameter must not be `nil`.
  */
+// 将指定NSData对象添加到表单中，并指定文件类型
 - (void)appendPartWithFileData:(NSData *)data
                           name:(NSString *)name
                       fileName:(NSString *)fileName
@@ -372,7 +379,7 @@ forHTTPHeaderField:(NSString *)field;
  @param data The data to be encoded and appended to the form data.
  @param name The name to be associated with the specified data. This parameter must not be `nil`.
  */
-
+// 将指定NSData对象添加到表单中
 - (void)appendPartWithFormData:(NSData *)data
                           name:(NSString *)name;
 
@@ -383,6 +390,7 @@ forHTTPHeaderField:(NSString *)field;
  @param headers The HTTP headers to be appended to the form data.
  @param body The data to be encoded and appended to the form data. This parameter must not be `nil`.
  */
+// 将指定的请求头和请求体添加到表单中
 - (void)appendPartWithHeaders:(nullable NSDictionary <NSString *, NSString *> *)headers
                          body:(NSData *)body;
 
@@ -394,6 +402,7 @@ forHTTPHeaderField:(NSString *)field;
  @param numberOfBytes Maximum packet size, in number of bytes. The default packet size for an input stream is 16kb.
  @param delay Duration of delay each time a packet is read. By default, no delay is set.
  */
+// 通过设置请求的带宽和延迟时间来提高在弱网环境下上传数据的成功率
 - (void)throttleBandwidthWithPacketSize:(NSUInteger)numberOfBytes
                                   delay:(NSTimeInterval)delay;
 
@@ -404,11 +413,13 @@ forHTTPHeaderField:(NSString *)field;
 /**
  `AFJSONRequestSerializer` is a subclass of `AFHTTPRequestSerializer` that encodes parameters as JSON using `NSJSONSerialization`, setting the `Content-Type` of the encoded request to `application/json`.
  */
+// 当服务器要求我们上传的数据格式类型为json时，可以使用此类
 @interface AFJSONRequestSerializer : AFHTTPRequestSerializer
 
 /**
  Options for writing the request JSON data from Foundation objects. For possible values, see the `NSJSONSerialization` documentation section "NSJSONWritingOptions". `0` by default.
  */
+// 设置JSON的编码类型
 @property (nonatomic, assign) NSJSONWritingOptions writingOptions;
 
 /**
@@ -416,6 +427,7 @@ forHTTPHeaderField:(NSString *)field;
 
  @param writingOptions The specified JSON writing options.
  */
+// 实例化工厂方法
 + (instancetype)serializerWithWritingOptions:(NSJSONWritingOptions)writingOptions;
 
 @end
@@ -425,16 +437,19 @@ forHTTPHeaderField:(NSString *)field;
 /**
  `AFPropertyListRequestSerializer` is a subclass of `AFHTTPRequestSerializer` that encodes parameters as JSON using `NSPropertyListSerializer`, setting the `Content-Type` of the encoded request to `application/x-plist`.
  */
+// 把传入的参数编码成plist格式NSDate对象传给服务器，一般是用来向服务器传递XML格式的数据
 @interface AFPropertyListRequestSerializer : AFHTTPRequestSerializer
 
 /**
  The property list format. Possible values are described in "NSPropertyListFormat".
  */
+// plist输出格式
 @property (nonatomic, assign) NSPropertyListFormat format;
 
 /**
  @warning The `writeOptions` property is currently unused.
  */
+// plist编码类型，目前这个值还没有用
 @property (nonatomic, assign) NSPropertyListWriteOptions writeOptions;
 
 /**
@@ -468,6 +483,7 @@ forHTTPHeaderField:(NSString *)field;
  `AFURLRequestSerializationErrorDomain`
  AFURLRequestSerializer errors. Error codes for `AFURLRequestSerializationErrorDomain` correspond to codes in `NSURLErrorDomain`.
  */
+// AFURLRequestSerializer类的错误，错误码对应NSURLErrorDomain的错误码
 FOUNDATION_EXPORT NSString * const AFURLRequestSerializationErrorDomain;
 
 /**
@@ -482,6 +498,7 @@ FOUNDATION_EXPORT NSString * const AFURLRequestSerializationErrorDomain;
  `AFNetworkingOperationFailingURLRequestErrorKey`
  The corresponding value is an `NSURLRequest` containing the request of the operation associated with an error. This key is only present in the `AFURLRequestSerializationErrorDomain`.
  */
+// 这个key只存在AFURLRequestSerializationErrorDomain中，其对应的值是NSURLRequest错误请求的操作
 FOUNDATION_EXPORT NSString * const AFNetworkingOperationFailingURLRequestErrorKey;
 
 /**
@@ -497,7 +514,10 @@ FOUNDATION_EXPORT NSString * const AFNetworkingOperationFailingURLRequestErrorKe
  `kAFUploadStream3GSuggestedDelay`
  Duration of delay each time a packet is read. Equal to 0.2 seconds.
  */
+// HTTP请求输入流的节流带宽字节数的最大分组大小。等于16KB。
 FOUNDATION_EXPORT NSUInteger const kAFUploadStream3GSuggestedPacketSize;
+
+// HTTP请求输入流的节流带宽每次读取数据包时的延迟时间。等于0.2秒。
 FOUNDATION_EXPORT NSTimeInterval const kAFUploadStream3GSuggestedDelay;
 
 NS_ASSUME_NONNULL_END
