@@ -711,25 +711,30 @@ forHTTPHeaderField:(NSString *)field
 @end
 
 #pragma mark -
-
+// 由随机生成的八位16进制字符串组成的边界字符串
 static NSString * AFCreateMultipartFormBoundary() {
     return [NSString stringWithFormat:@"Boundary+%08X%08X", arc4random(), arc4random()];
 }
 
+// 回车换行
 static NSString * const kAFMultipartFormCRLF = @"\r\n";
 
+// 生成开始边界字符串
 static inline NSString * AFMultipartFormInitialBoundary(NSString *boundary) {
     return [NSString stringWithFormat:@"--%@%@", boundary, kAFMultipartFormCRLF];
 }
 
+// 生成中间边界字符串
 static inline NSString * AFMultipartFormEncapsulationBoundary(NSString *boundary) {
     return [NSString stringWithFormat:@"%@--%@%@", kAFMultipartFormCRLF, boundary, kAFMultipartFormCRLF];
 }
 
+// 生成结束边界字符串
 static inline NSString * AFMultipartFormFinalBoundary(NSString *boundary) {
     return [NSString stringWithFormat:@"%@--%@--%@", kAFMultipartFormCRLF, boundary, kAFMultipartFormCRLF];
 }
 
+// 根据文件后缀名获取文件的MIME类型，即Content-Type字段的值
 static inline NSString * AFContentTypeForPathExtension(NSString *extension) {
     NSString *UTI = (__bridge_transfer NSString *)UTTypeCreatePreferredIdentifierForTag(kUTTagClassFilenameExtension, (__bridge CFStringRef)extension, NULL);
     NSString *contentType = (__bridge_transfer NSString *)UTTypeCopyPreferredTagWithClass((__bridge CFStringRef)UTI, kUTTagClassMIMEType);
@@ -740,36 +745,59 @@ static inline NSString * AFContentTypeForPathExtension(NSString *extension) {
     }
 }
 
+// 3G环境上传建议带宽
 NSUInteger const kAFUploadStream3GSuggestedPacketSize = 1024 * 16;
+// 3G环境上传建议延时
 NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
 
+// 每一个AFHTTPBodyPart代表一项表单数据，即一个要上传的文件的数据，并由它自己读取它内部的数据
 @interface AFHTTPBodyPart : NSObject
+// 编码方式
 @property (nonatomic, assign) NSStringEncoding stringEncoding;
+// 段落头
 @property (nonatomic, strong) NSDictionary *headers;
+// 边界
 @property (nonatomic, copy) NSString *boundary;
+// 内容
 @property (nonatomic, strong) id body;
+// 内容长度
 @property (nonatomic, assign) unsigned long long bodyContentLength;
+// 输入流
 @property (nonatomic, strong) NSInputStream *inputStream;
 
+// 是否有开始边界
 @property (nonatomic, assign) BOOL hasInitialBoundary;
+// 是否有结束边界
 @property (nonatomic, assign) BOOL hasFinalBoundary;
 
+// 内容长度
 @property (readonly, nonatomic, assign, getter = hasBytesAvailable) BOOL bytesAvailable;
+// 内容长度
 @property (readonly, nonatomic, assign) unsigned long long contentLength;
 
+// 把保存的数据读取出来，然后写入到传递进来的参数buffer中
 - (NSInteger)read:(uint8_t *)buffer
         maxLength:(NSUInteger)length;
 @end
 
+// 保存用户要上传的数据，并在数据上传时控制数据的读取
 @interface AFMultipartBodyStream : NSInputStream <NSStreamDelegate>
+// 单个包的大小
 @property (nonatomic, assign) NSUInteger numberOfBytesInPacket;
+// 延时
 @property (nonatomic, assign) NSTimeInterval delay;
+// 输入流
 @property (nonatomic, strong) NSInputStream *inputStream;
+// 内容大小
 @property (readonly, nonatomic, assign) unsigned long long contentLength;
+// 是否为空
 @property (readonly, nonatomic, assign, getter = isEmpty) BOOL empty;
 
+// 通过编码方式初始化
 - (instancetype)initWithStringEncoding:(NSStringEncoding)encoding;
+//  设置开始和结束边界
 - (void)setInitialAndFinalBoundaries;
+//  添加AFHTTPBodyPart对象
 - (void)appendHTTPBodyPart:(AFHTTPBodyPart *)bodyPart;
 @end
 
@@ -957,18 +985,30 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
 @end
 
 #pragma mark -
+/*
+ 因为AFMultipartBodyStream类继承自NSInputStream类，而NSInputStream继承自NSStream类，但NSStream类的streamStatus属性和streamError属性是readonly，想要在AFMultipartBodyStream类内部使用读写这两个属性，于是添加了类扩展，改为私有可读写的。
+*/
 
+/*
+ 原本只要通过@property声明属性，编译器就会自动帮我们生成getter、setter和成员变量，但是子类通过@property覆盖了父类的属性，这时编译器就不会自动生成成员变量，因此在AFMultipartBodyStream类的@implementation中可以看到@synthesize streamStatus;和@synthesize streamError;两句代码来生成成员变量；
+ */
 @interface NSStream ()
 @property (readwrite) NSStreamStatus streamStatus;
 @property (readwrite, copy) NSError *streamError;
 @end
 
 @interface AFMultipartBodyStream () <NSCopying>
+// 编码方式
 @property (readwrite, nonatomic, assign) NSStringEncoding stringEncoding;
+// 保存AFHTTPBodyPart的数组
 @property (readwrite, nonatomic, strong) NSMutableArray *HTTPBodyParts;
+//  保存对属性HTTPBodyParts内容的遍历
 @property (readwrite, nonatomic, strong) NSEnumerator *HTTPBodyPartEnumerator;
+// 当前读写的HTTPBodyPart
 @property (readwrite, nonatomic, strong) AFHTTPBodyPart *currentHTTPBodyPart;
+// 输出流
 @property (readwrite, nonatomic, strong) NSOutputStream *outputStream;
+// 缓冲
 @property (readwrite, nonatomic, strong) NSMutableData *buffer;
 @end
 
@@ -985,6 +1025,7 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
         return nil;
     }
 
+    // 保存传入的参数和初始化属性
     self.stringEncoding = encoding;
     self.HTTPBodyParts = [NSMutableArray array];
     self.numberOfBytesInPacket = NSIntegerMax;
@@ -993,6 +1034,7 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
 }
 
 - (void)setInitialAndFinalBoundaries {
+    // 如果属性HTTPBodyParts内有元素，就将第一个元素设置为有开始边界，最后一个元素设置为有结束边界，其他元素都设置为无
     if ([self.HTTPBodyParts count] > 0) {
         for (AFHTTPBodyPart *bodyPart in self.HTTPBodyParts) {
             bodyPart.hasInitialBoundary = NO;
@@ -1004,23 +1046,27 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
     }
 }
 
+// 向HTTPBodyParts属性内添加元素
 - (void)appendHTTPBodyPart:(AFHTTPBodyPart *)bodyPart {
     [self.HTTPBodyParts addObject:bodyPart];
 }
 
+// 判断HTTPBodyParts属性内是否有元素
 - (BOOL)isEmpty {
     return [self.HTTPBodyParts count] == 0;
 }
 
 #pragma mark - NSInputStream
-
+// 对父类NSInputStream方法的重写
 - (NSInteger)read:(uint8_t *)buffer
         maxLength:(NSUInteger)length
 {
+    // 如果输入流的状态是关闭就结束
     if ([self streamStatus] == NSStreamStatusClosed) {
         return 0;
     }
 
+     // 定义变量记录已读取总数
     NSInteger totalNumberOfBytesRead = 0;
 
     while ((NSUInteger)totalNumberOfBytesRead < MIN(length, self.numberOfBytesInPacket)) {
@@ -1136,19 +1182,28 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
 #pragma mark -
 
 typedef enum {
+    // 中间边界段落
     AFEncapsulationBoundaryPhase = 1,
+    // 头段落
     AFHeaderPhase                = 2,
+    // 内容段落
     AFBodyPhase                  = 3,
+    // 结束边界段落
     AFFinalBoundaryPhase         = 4,
 } AFHTTPBodyPartReadPhase;
 
 @interface AFHTTPBodyPart () <NSCopying> {
+    // 保存要读取的段落，其实就是利用状态机模式控制对AFHTTPBodyPart对象不同内容的读取
     AFHTTPBodyPartReadPhase _phase;
+    // 保存由AFHTTPBodyPart对象的body属性生成的输入流对象
     NSInputStream *_inputStream;
+    // 保存当前已读取字节数，用来计算读取进度
     unsigned long long _phaseReadOffset;
 }
 
+// 切换到下一段落进行读取，即控制状态机的状态
 - (BOOL)transitionToNextPhase;
+// 将AFHTTPBodyPart对象的属性中保存的数据转成的NSDdata对象写入到buffer中
 - (NSInteger)readData:(NSData *)data
            intoBuffer:(uint8_t *)buffer
             maxLength:(NSUInteger)length;
@@ -1162,20 +1217,24 @@ typedef enum {
         return nil;
     }
 
+    // 切换到主线程，初始化成员变量_phase为AFEncapsulationBoundaryPhase，_phaseReadOffset为0
     [self transitionToNextPhase];
 
     return self;
 }
 
 - (void)dealloc {
+    // 关闭输入流并置空
     if (_inputStream) {
         [_inputStream close];
         _inputStream = nil;
     }
 }
 
+// inputStream的懒加载方法
 - (NSInputStream *)inputStream {
     if (!_inputStream) {
+        // 根据body属性的类 生成对应的NSInputStream对象并保存
         if ([self.body isKindOfClass:[NSData class]]) {
             _inputStream = [NSInputStream inputStreamWithData:self.body];
         } else if ([self.body isKindOfClass:[NSURL class]]) {
@@ -1190,6 +1249,7 @@ typedef enum {
     return _inputStream;
 }
 
+// 将headers属性所保存的字典类型的数据拼接成指定格式的字符串
 - (NSString *)stringForHeaders {
     NSMutableString *headerString = [NSMutableString string];
     for (NSString *field in [self.headers allKeys]) {
@@ -1200,29 +1260,36 @@ typedef enum {
     return [NSString stringWithString:headerString];
 }
 
+// 获取内容的总长度
 - (unsigned long long)contentLength {
     unsigned long long length = 0;
 
+    // 如果有开始边界就生成开始边界字符串，否则就生成中间边界字符串，然后生成对应的NSData对象，并获取长度
     NSData *encapsulationBoundaryData = [([self hasInitialBoundary] ? AFMultipartFormInitialBoundary(self.boundary) : AFMultipartFormEncapsulationBoundary(self.boundary)) dataUsingEncoding:self.stringEncoding];
     length += [encapsulationBoundaryData length];
 
+    // 添加header对应的NSData对象的长度
     NSData *headersData = [[self stringForHeaders] dataUsingEncoding:self.stringEncoding];
     length += [headersData length];
 
+    // 添加body对应的NSData对象的长度
     length += _bodyContentLength;
 
+    // 如果有结束边界就生成结束边界字符串，否则就生成中间边界字符串，然后生成对应的NSData对象，并获取长度后添加
     NSData *closingBoundaryData = ([self hasFinalBoundary] ? [AFMultipartFormFinalBoundary(self.boundary) dataUsingEncoding:self.stringEncoding] : [NSData data]);
     length += [closingBoundaryData length];
 
     return length;
 }
 
+// 判断是否有可读数据
 - (BOOL)hasBytesAvailable {
     // Allows `read:maxLength:` to be called again if `AFMultipartFormFinalBoundary` doesn't fit into the available buffer
     if (_phase == AFFinalBoundaryPhase) {
         return YES;
     }
 
+    // 根据inputStream的属性streamStatus来判断是否有可读数据
     switch (self.inputStream.streamStatus) {
         case NSStreamStatusNotOpen:
         case NSStreamStatusOpening:
@@ -1238,22 +1305,29 @@ typedef enum {
     }
 }
 
+// 将自身的数据写入到buffer中
 - (NSInteger)read:(uint8_t *)buffer
         maxLength:(NSUInteger)length
 {
     NSInteger totalNumberOfBytesRead = 0;
 
+    // 如果要读取的段落是中间边界段落
     if (_phase == AFEncapsulationBoundaryPhase) {
+        // 根据是否有开始边界生成对应的边界字符串，然后生成相应的NSData对象，写入到butter中
         NSData *encapsulationBoundaryData = [([self hasInitialBoundary] ? AFMultipartFormInitialBoundary(self.boundary) : AFMultipartFormEncapsulationBoundary(self.boundary)) dataUsingEncoding:self.stringEncoding];
         totalNumberOfBytesRead += [self readData:encapsulationBoundaryData intoBuffer:&buffer[totalNumberOfBytesRead] maxLength:(length - (NSUInteger)totalNumberOfBytesRead)];
     }
 
+    // 如果要读取的段落是头部段落
     if (_phase == AFHeaderPhase) {
+        // 将header编码写入到buffer中
         NSData *headersData = [[self stringForHeaders] dataUsingEncoding:self.stringEncoding];
         totalNumberOfBytesRead += [self readData:headersData intoBuffer:&buffer[totalNumberOfBytesRead] maxLength:(length - (NSUInteger)totalNumberOfBytesRead)];
     }
 
+    // 如果要读取的段落是内容段落
     if (_phase == AFBodyPhase) {
+        // 将属性body中保存的数据转为NSInputStream对象再写入到buffer中
         NSInteger numberOfBytesRead = 0;
 
         numberOfBytesRead = [self.inputStream read:&buffer[totalNumberOfBytesRead] maxLength:(length - (NSUInteger)totalNumberOfBytesRead)];
@@ -1262,13 +1336,16 @@ typedef enum {
         } else {
             totalNumberOfBytesRead += numberOfBytesRead;
 
+            // 如果inputStream的状态是结束、关闭或者出错，就切换状态机的状态
             if ([self.inputStream streamStatus] >= NSStreamStatusAtEnd) {
                 [self transitionToNextPhase];
             }
         }
     }
 
+    // 如果要读取的段落是结束边界段落
     if (_phase == AFFinalBoundaryPhase) {
+        // 根据是否有结束边界生成对应的边界字符串，然后生成相应的NSData对象，写入到butter中
         NSData *closingBoundaryData = ([self hasFinalBoundary] ? [AFMultipartFormFinalBoundary(self.boundary) dataUsingEncoding:self.stringEncoding] : [NSData data]);
         totalNumberOfBytesRead += [self readData:closingBoundaryData intoBuffer:&buffer[totalNumberOfBytesRead] maxLength:(length - (NSUInteger)totalNumberOfBytesRead)];
     }
@@ -1276,15 +1353,20 @@ typedef enum {
     return totalNumberOfBytesRead;
 }
 
+// 将data中的数据写入到buffer中
 - (NSInteger)readData:(NSData *)data
            intoBuffer:(uint8_t *)buffer
             maxLength:(NSUInteger)length
 {
+    // 计算要读取的范围
     NSRange range = NSMakeRange((NSUInteger)_phaseReadOffset, MIN([data length] - ((NSUInteger)_phaseReadOffset), length));
+    // 根据计算好的范围读写
     [data getBytes:buffer range:range];
 
+    // 记录读写的进度
     _phaseReadOffset += range.length;
 
+    // 如果data中的数据读写完成，就切换状态机的状态
     if (((NSUInteger)_phaseReadOffset) >= [data length]) {
         [self transitionToNextPhase];
     }
@@ -1292,7 +1374,9 @@ typedef enum {
     return (NSInteger)range.length;
 }
 
+// 切换到下一段落进行读取，即控制状态机的状态
 - (BOOL)transitionToNextPhase {
+    // 如果该方法不是在主线程调用，就切换到主线程
     if (![[NSThread currentThread] isMainThread]) {
         dispatch_sync(dispatch_get_main_queue(), ^{
             [self transitionToNextPhase];
@@ -1300,24 +1384,30 @@ typedef enum {
         return YES;
     }
 
+    // 根据目前正在读取的段落，修改接下来要读取的段落
     switch (_phase) {
+        // 如果现在读取的是中间边界段落，接下来就要读取头部段落
         case AFEncapsulationBoundaryPhase:
             _phase = AFHeaderPhase;
             break;
+        // 如果现在读取的是头部段落，接下来就要读取内容段落，初始化inputStream添加到当前运行循环中，并开启
         case AFHeaderPhase:
             [self.inputStream scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:NSRunLoopCommonModes];
             [self.inputStream open];
             _phase = AFBodyPhase;
             break;
+        // 如果现在读取的是内容段落，接下来就要读取结束边界段落，关闭inputStream
         case AFBodyPhase:
             [self.inputStream close];
             _phase = AFFinalBoundaryPhase;
             break;
+        // 如果现在读取的是结束边界段落，就赋值为中间边界段落
         case AFFinalBoundaryPhase:
         default:
             _phase = AFEncapsulationBoundaryPhase;
             break;
     }
+    // 段落读取偏移量置零
     _phaseReadOffset = 0;
 
     return YES;
