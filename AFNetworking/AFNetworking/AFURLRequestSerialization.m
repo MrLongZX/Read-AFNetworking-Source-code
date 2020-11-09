@@ -194,11 +194,13 @@ NSArray * AFQueryStringPairsFromKeyAndValue(NSString *key, id value) {
 }
 
 #pragma mark -
-
+// 提供接口以便用户添加上传的数据
 @interface AFStreamingMultipartFormData : NSObject <AFMultipartFormData>
+// 通过传递请求和编码方式进行初始化
 - (instancetype)initWithURLRequest:(NSMutableURLRequest *)urlRequest
                     stringEncoding:(NSStringEncoding)encoding;
 
+// 返回最终处理好的NSMutableURLRequest
 - (NSMutableURLRequest *)requestByFinalizingMultipartFormData;
 @end
 
@@ -804,9 +806,13 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
 #pragma mark -
 
 @interface AFStreamingMultipartFormData ()
+// 保存传入的NSMutableURLRequest对象
 @property (readwrite, nonatomic, copy) NSMutableURLRequest *request;
+// 保存传入的编码方式
 @property (readwrite, nonatomic, assign) NSStringEncoding stringEncoding;
+// 保存边界字符串
 @property (readwrite, nonatomic, copy) NSString *boundary;
+// 保存输入数据流
 @property (readwrite, nonatomic, strong) AFMultipartBodyStream *bodyStream;
 @end
 
@@ -820,6 +826,7 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
         return nil;
     }
 
+    // 保存传入的参数，初始化私有属性
     self.request = urlRequest;
     self.stringEncoding = encoding;
     self.boundary = AFCreateMultipartFormBoundary();
@@ -837,10 +844,13 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
                          name:(NSString *)name
                         error:(NSError * __autoreleasing *)error
 {
+    // 在debug模式下缺少对应参数会crash
     NSParameterAssert(fileURL);
     NSParameterAssert(name);
 
+    // 通过文件的路径中获取带有后缀的文件名
     NSString *fileName = [fileURL lastPathComponent];
+    // 通过文件的路径获取不带“.”的后缀名后获取文件的mime类型
     NSString *mimeType = AFContentTypeForPathExtension([fileURL pathExtension]);
 
     return [self appendPartWithFileURL:fileURL name:name fileName:fileName mimeType:mimeType error:error];
@@ -852,19 +862,24 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
                      mimeType:(NSString *)mimeType
                         error:(NSError * __autoreleasing *)error
 {
+    // 在debug模式下缺少对应参数会crash
     NSParameterAssert(fileURL);
     NSParameterAssert(name);
     NSParameterAssert(fileName);
     NSParameterAssert(mimeType);
 
+    // 如果不是一个合法的文件路径
     if (![fileURL isFileURL]) {
+        // 就生成一个错误信息赋值给传入的错误对象指针后返回
         NSDictionary *userInfo = @{NSLocalizedFailureReasonErrorKey: NSLocalizedStringFromTable(@"Expected URL to be a file URL", @"AFNetworking", nil)};
         if (error) {
             *error = [[NSError alloc] initWithDomain:AFURLRequestSerializationErrorDomain code:NSURLErrorBadURL userInfo:userInfo];
         }
 
         return NO;
+    // 如果文件路径无法访问
     } else if ([fileURL checkResourceIsReachableAndReturnError:error] == NO) {
+        // 就生成一个错误信息赋值给传入的错误对象指针后返回
         NSDictionary *userInfo = @{NSLocalizedFailureReasonErrorKey: NSLocalizedStringFromTable(@"File URL not reachable.", @"AFNetworking", nil)};
         if (error) {
             *error = [[NSError alloc] initWithDomain:AFURLRequestSerializationErrorDomain code:NSURLErrorBadURL userInfo:userInfo];
@@ -873,15 +888,18 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
         return NO;
     }
 
+    // 通过文件路径获取文件的属性，如果获取不到则返回，因为无法获取到文件的大小
     NSDictionary *fileAttributes = [[NSFileManager defaultManager] attributesOfItemAtPath:[fileURL path] error:error];
     if (!fileAttributes) {
         return NO;
     }
 
+    // 生成一个可变字典保存请求头的相关信息，并为Content-Disposition和Content-Type字段赋值
     NSMutableDictionary *mutableHeaders = [NSMutableDictionary dictionary];
     [mutableHeaders setValue:[NSString stringWithFormat:@"form-data; name=\"%@\"; filename=\"%@\"", name, fileName] forKey:@"Content-Disposition"];
     [mutableHeaders setValue:mimeType forKey:@"Content-Type"];
 
+    // 生成一个AFHTTPBodyPart对象保存要传输的内容，并添加到私有属性bodyStream中
     AFHTTPBodyPart *bodyPart = [[AFHTTPBodyPart alloc] init];
     bodyPart.stringEncoding = self.stringEncoding;
     bodyPart.headers = mutableHeaders;
@@ -899,14 +917,17 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
                            length:(int64_t)length
                          mimeType:(NSString *)mimeType
 {
+    // 在debug模式下缺少对应参数会crash
     NSParameterAssert(name);
     NSParameterAssert(fileName);
     NSParameterAssert(mimeType);
 
+    // 生成一个可变字典保存请求头的相关信息，并为Content-Disposition和Content-Type字段赋值
     NSMutableDictionary *mutableHeaders = [NSMutableDictionary dictionary];
     [mutableHeaders setValue:[NSString stringWithFormat:@"form-data; name=\"%@\"; filename=\"%@\"", name, fileName] forKey:@"Content-Disposition"];
     [mutableHeaders setValue:mimeType forKey:@"Content-Type"];
 
+    // 生成一个AFHTTPBodyPart对象保存要传输的内容，并添加到私有属性bodyStream中
     AFHTTPBodyPart *bodyPart = [[AFHTTPBodyPart alloc] init];
     bodyPart.stringEncoding = self.stringEncoding;
     bodyPart.headers = mutableHeaders;
@@ -923,10 +944,12 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
                       fileName:(NSString *)fileName
                       mimeType:(NSString *)mimeType
 {
+    // 在debug模式下缺少对应参数会crash
     NSParameterAssert(name);
     NSParameterAssert(fileName);
     NSParameterAssert(mimeType);
 
+    // 生成一个可变字典保存请求头的相关信息，并为Content-Disposition和Content-Type字段赋值
     NSMutableDictionary *mutableHeaders = [NSMutableDictionary dictionary];
     [mutableHeaders setValue:[NSString stringWithFormat:@"form-data; name=\"%@\"; filename=\"%@\"", name, fileName] forKey:@"Content-Disposition"];
     [mutableHeaders setValue:mimeType forKey:@"Content-Type"];
@@ -937,8 +960,10 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
 - (void)appendPartWithFormData:(NSData *)data
                           name:(NSString *)name
 {
+    // 在debug模式下缺少对应参数会crash
     NSParameterAssert(name);
 
+    // 生成一个可变字典保存请求头的相关信息，并为Content-Disposition和Content-Type字段赋值
     NSMutableDictionary *mutableHeaders = [NSMutableDictionary dictionary];
     [mutableHeaders setValue:[NSString stringWithFormat:@"form-data; name=\"%@\"", name] forKey:@"Content-Disposition"];
 
@@ -948,8 +973,10 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
 - (void)appendPartWithHeaders:(NSDictionary *)headers
                          body:(NSData *)body
 {
+    // 在debug模式下缺少对应参数会crash
     NSParameterAssert(body);
 
+    // 生成一个AFHTTPBodyPart对象保存要传输的内容，并添加到私有属性bodyStream中
     AFHTTPBodyPart *bodyPart = [[AFHTTPBodyPart alloc] init];
     bodyPart.stringEncoding = self.stringEncoding;
     bodyPart.headers = headers;
@@ -963,19 +990,24 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
 - (void)throttleBandwidthWithPacketSize:(NSUInteger)numberOfBytes
                                   delay:(NSTimeInterval)delay
 {
+    // 设置发送单个包的大小和请求延迟
     self.bodyStream.numberOfBytesInPacket = numberOfBytes;
     self.bodyStream.delay = delay;
 }
 
 - (NSMutableURLRequest *)requestByFinalizingMultipartFormData {
+    // 如果没有数据流就直接返回NSMutableURLRequest对象
     if ([self.bodyStream isEmpty]) {
         return self.request;
     }
 
     // Reset the initial and final boundaries to ensure correct Content-Length
+    // 设置数据流的开始和结束边界
     [self.bodyStream setInitialAndFinalBoundaries];
+    // 将数据流赋值给NSMutableURLRequest对象
     [self.request setHTTPBodyStream:self.bodyStream];
 
+    // 为NSMutableURLRequest对象的请求头的Content-Type和Content-Length字段赋值
     [self.request setValue:[NSString stringWithFormat:@"multipart/form-data; boundary=%@", self.boundary] forHTTPHeaderField:@"Content-Type"];
     [self.request setValue:[NSString stringWithFormat:@"%llu", [self.bodyStream contentLength]] forHTTPHeaderField:@"Content-Length"];
 
@@ -997,12 +1029,13 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
 @property (readwrite, copy) NSError *streamError;
 @end
 
+// 类扩展
 @interface AFMultipartBodyStream () <NSCopying>
 // 编码方式
 @property (readwrite, nonatomic, assign) NSStringEncoding stringEncoding;
 // 保存AFHTTPBodyPart的数组
 @property (readwrite, nonatomic, strong) NSMutableArray *HTTPBodyParts;
-//  保存对属性HTTPBodyParts内容的遍历
+// 保存对属性HTTPBodyParts内容的遍历
 @property (readwrite, nonatomic, strong) NSEnumerator *HTTPBodyPartEnumerator;
 // 当前读写的HTTPBodyPart
 @property (readwrite, nonatomic, strong) AFHTTPBodyPart *currentHTTPBodyPart;
@@ -1046,7 +1079,7 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
     }
 }
 
-// 向HTTPBodyParts属性内添加元素
+// 向HTTPBodyParts数组属性内添加元素
 - (void)appendHTTPBodyPart:(AFHTTPBodyPart *)bodyPart {
     [self.HTTPBodyParts addObject:bodyPart];
 }
@@ -1069,20 +1102,29 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
      // 定义变量记录已读取总数
     NSInteger totalNumberOfBytesRead = 0;
 
+    // 只要已读取的数量小于限定的数量和包的总数量二者中的最小值
     while ((NSUInteger)totalNumberOfBytesRead < MIN(length, self.numberOfBytesInPacket)) {
+         // 如果当前HTTPBodyPart为空或者没有可读数据
         if (!self.currentHTTPBodyPart || ![self.currentHTTPBodyPart hasBytesAvailable]) {
+            // 为currentHTTPBodyPart赋值，但如果下一个元素为空则跳出循环
             if (!(self.currentHTTPBodyPart = [self.HTTPBodyPartEnumerator nextObject])) {
                 break;
             }
+        // 如果当前HTTPBodyPart有值
         } else {
+            // 计算还能读取的最大数量
             NSUInteger maxLength = MIN(length, self.numberOfBytesInPacket) - (NSUInteger)totalNumberOfBytesRead;
+            // 将currentHTTPBodyPart中的数据写入到buffer中
             NSInteger numberOfBytesRead = [self.currentHTTPBodyPart read:&buffer[totalNumberOfBytesRead] maxLength:maxLength];
+            // 如果写入失败
             if (numberOfBytesRead == -1) {
                 self.streamError = self.currentHTTPBodyPart.inputStream.streamError;
                 break;
             } else {
+                // 记录当前已读总数
                 totalNumberOfBytesRead += numberOfBytesRead;
 
+                // 如果设置了延时，就在当前线程延时一段时间
                 if (self.delay > 0.0f) {
                     [NSThread sleepForTimeInterval:self.delay];
                 }
@@ -1093,43 +1135,54 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
     return totalNumberOfBytesRead;
 }
 
+// 关闭读取缓存的方法
 - (BOOL)getBuffer:(__unused uint8_t **)buffer
            length:(__unused NSUInteger *)len
 {
     return NO;
 }
 
+ // 只要状态为开就是有数据
 - (BOOL)hasBytesAvailable {
     return [self streamStatus] == NSStreamStatusOpen;
 }
 
 #pragma mark - NSStream
+// 对父类NSInputStream的父类NSStream方法的重写
 
 - (void)open {
+    // 如果流的状态是打开就不继续执行
     if (self.streamStatus == NSStreamStatusOpen) {
         return;
     }
 
+    // 将流的状态设置为打开
     self.streamStatus = NSStreamStatusOpen;
 
+    // 设置开始和结束边界
     [self setInitialAndFinalBoundaries];
+    // 初始化HTTPBodyPartEnumerator属性
     self.HTTPBodyPartEnumerator = [self.HTTPBodyParts objectEnumerator];
 }
 
+// 将流的状态设置为关闭
 - (void)close {
     self.streamStatus = NSStreamStatusClosed;
 }
 
+// 关闭对key属性的查询
 - (id)propertyForKey:(__unused NSString *)key {
     return nil;
 }
 
+// 关闭对key属性的赋值
 - (BOOL)setProperty:(__unused id)property
              forKey:(__unused NSString *)key
 {
     return NO;
 }
 
+// 将设置和移除运行环境的方法设置为什么都不做
 - (void)scheduleInRunLoop:(__unused NSRunLoop *)aRunLoop
                   forMode:(__unused NSString *)mode
 {}
@@ -1138,6 +1191,7 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
                   forMode:(__unused NSString *)mode
 {}
 
+// 遍历HTTPBodyParts中的元素计算总长度
 - (unsigned long long)contentLength {
     unsigned long long length = 0;
     for (AFHTTPBodyPart *bodyPart in self.HTTPBodyParts) {
@@ -1148,6 +1202,12 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
 }
 
 #pragma mark - Undocumented CFReadStream Bridged Methods
+// 对父类NSInputStream的父类NSStream私有方法的重写
+
+/*
+ 为什么要重写私有方法？因为NSMutableURLRequest的setHTTPBodyStream方法接受的是一个NSInputStream *参数，那我们要自定义NSInputStream的话，创建一个NSInputStream的子类传给它是不是就可以了？实际上不行，这样做后用NSMutableURLRequest发出请求会导致crash，提示[xx _scheduleInCFRunLoop:forMode:]: unrecognized selector。
+ 这是因为NSMutableURLRequest实际上接受的不是NSInputStream对象，而是CoreFoundation的CFReadStreamRef对象，因为CFReadStreamRef和NSInputStream是toll-free bridged，可以自由转换，但CFReadStreamRef会用到CFStreamScheduleWithRunLoop这个方法，当它调用到这个方法时，object-c的toll-free bridging机制会调用object-c对象NSInputStream的相应函数，这里就调用到了_scheduleInCFRunLoop:forMode:，若不实现这个方法就会crash
+ */
 
 - (void)_scheduleInCFRunLoop:(__unused CFRunLoopRef)aRunLoop
                      forMode:(__unused CFStringRef)aMode
@@ -1165,6 +1225,7 @@ NSTimeInterval const kAFUploadStream3GSuggestedDelay = 0.2;
 
 #pragma mark - NSCopying
 
+// NSCopying协议方法的实现
 - (instancetype)copyWithZone:(NSZone *)zone {
     AFMultipartBodyStream *bodyStreamCopy = [[[self class] allocWithZone:zone] initWithStringEncoding:self.stringEncoding];
 
@@ -1275,7 +1336,7 @@ typedef enum {
     // 添加body对应的NSData对象的长度
     length += _bodyContentLength;
 
-    // 如果有结束边界就生成结束边界字符串，否则就生成中间边界字符串，然后生成对应的NSData对象，并获取长度后添加
+    // 如果有结束边界就生成结束边界字符串转编码后的NSData对象，否则就生成空NSData对象，获取长度后添加
     NSData *closingBoundaryData = ([self hasFinalBoundary] ? [AFMultipartFormFinalBoundary(self.boundary) dataUsingEncoding:self.stringEncoding] : [NSData data]);
     length += [closingBoundaryData length];
 
